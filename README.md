@@ -28,3 +28,5 @@ Run source tests with: python -m unittest discover -s source/tests -v
 Run package tests with: python -m unittest discover -s user_agent/tests -v
 
 See TECHNICAL_README.md for implementation details.
+
+See DEMO_README.md for creating problems and testing your own solutions locally.
