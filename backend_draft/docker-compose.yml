@@ -1,0 +1,14 @@
+services:
+  judge-backend:
+    build: .
+    ports:
+      - "38123:38123"
+    environment:
+      DATABASE_PATH: /data/chakrikoi.db
+      GRANT_SIGNING_SECRET: change-this-before-any-non-local-use
+      RUNNER_ALLOWED_ORIGINS: http://localhost:3000,https://app.chakrikoi.com
+    volumes:
+      - judge-data:/data
+
+volumes:
+  judge-data:

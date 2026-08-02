@@ -1,0 +1,10 @@
+[Unit]
+Description=Chakri Koi local code runner
+
+[Service]
+ExecStart=%h/.local/bin/chakrikoi-runner --bootstrap %h/.config/chakrikoi-runner/bootstrap.json
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

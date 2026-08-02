@@ -1,0 +1,46 @@
+[
+  {
+    "slug": "sum-two-integers",
+    "title": "Sum of Two Integers",
+    "statement": "Read two signed integers and print their sum.",
+    "time_limit_ms": 1000,
+    "memory_limit_mb": 128,
+    "allowed_languages": ["python", "c", "cpp", "javascript", "java"],
+    "tests": [
+      {"display_order": 1, "input": "1 2\n", "expected_output": "3\n", "is_sample": true},
+      {"display_order": 2, "input": "-10 15\n", "expected_output": "5\n", "is_sample": true},
+      {"display_order": 3, "input": "0 0\n", "expected_output": "0\n", "is_sample": false},
+      {"display_order": 4, "input": "999999999 1\n", "expected_output": "1000000000\n", "is_sample": false}
+    ]
+  },
+  {
+    "slug": "count-vowels",
+    "title": "Count Vowels",
+    "statement": "Read one line of text. Print the number of English vowels (a, e, i, o, u), case-insensitively.",
+    "time_limit_ms": 1000,
+    "memory_limit_mb": 128,
+    "allowed_languages": ["python", "c", "cpp", "javascript", "java"],
+    "tests": [
+      {"display_order": 1, "input": "OpenAI\n", "expected_output": "4\n", "is_sample": true},
+      {"display_order": 2, "input": "rhythm\n", "expected_output": "0\n", "is_sample": true},
+      {"display_order": 3, "input": "A quick brown fox\n", "expected_output": "5\n", "is_sample": false},
+      {"display_order": 4, "input": "AEIOU aeiou\n", "expected_output": "10\n", "is_sample": false},
+      {"display_order": 5, "input": "\n", "expected_output": "0\n", "is_sample": false}
+    ]
+  },
+  {
+    "slug": "is-palindrome",
+    "title": "Is Palindrome",
+    "statement": "Read one line of text. Ignore case and all non-alphanumeric characters. Print YES if the remaining characters form a palindrome; otherwise print NO.",
+    "time_limit_ms": 1000,
+    "memory_limit_mb": 128,
+    "allowed_languages": ["python", "c", "cpp", "javascript", "java"],
+    "tests": [
+      {"display_order": 1, "input": "racecar\n", "expected_output": "YES\n", "is_sample": true},
+      {"display_order": 2, "input": "hello\n", "expected_output": "NO\n", "is_sample": true},
+      {"display_order": 3, "input": "palindrome\n", "expected_output": "NO\n", "is_sample": false},
+      {"display_order": 4, "input": "12321\n", "expected_output": "YES\n", "is_sample": false},
+      {"display_order": 5, "input": "\n", "expected_output": "YES\n", "is_sample": false}
+    ]
+  }
+]

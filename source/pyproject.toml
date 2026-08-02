@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chakrikoi-installed-runner"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["pyinstaller>=6.15"]
+
+[project.scripts]
+chakrikoi-runner-installer = "chakrikoi_installed_runner.install:main"
+chakrikoi-installed-runner = "chakrikoi_installed_runner.runner:main"
+
+[tool.setuptools.packages.find]
+where = ["runner"]
