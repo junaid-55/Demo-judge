@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#171a1f" />
+    <title>Chakrikoi Judge</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Chakrikoi Judge home">chakrikoi<span>judge</span></a>
+      <div class="agent-control">
+        <label for="agent-url">Local agent</label>
+        <input id="agent-url" type="url" inputmode="url" value="http://127.0.0.1:37123" aria-describedby="connection-note" />
+        <button id="connect-button" class="secondary" type="button">Connect</button>
+        <span id="connection-status" class="connection waiting">Not checked</span>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="problem-sidebar" aria-label="Problems">
+        <div class="sidebar-heading">
+          <p class="eyebrow">Practice set</p>
+          <h1>Problems</h1>
+        </div>
+        <div id="problem-list" class="problem-list" aria-live="polite">
+          <p class="muted">Connect the local agent to load problems.</p>
+        </div>
+      </aside>
+
+      <section class="problem-panel" aria-labelledby="problem-title">
+        <div id="problem-content" class="empty-problem">
+          <p class="eyebrow">Local judging</p>
+          <h2 id="problem-title">Connect your local agent</h2>
+          <p id="connection-note">This site submits code only to the runner on your computer. The runner fetches the problem, private tests, and signed permission from the local backend.</p>
+        </div>
+      </section>
+
+      <section class="editor-panel" aria-label="Submission editor">
+        <div class="editor-toolbar">
+          <div>
+            <p class="eyebrow">Submission</p>
+            <span id="editor-problem" class="editor-problem">No problem selected</span>
+          </div>
+          <label class="language-select" for="language">
+            <span>Language</span>
+            <select id="language" disabled></select>
+          </label>
+          <button id="submit-button" class="submit" type="button" disabled>Submit code</button>
+        </div>
+        <div class="editor-shell">
+          <div id="line-numbers" class="line-numbers" aria-hidden="true">1</div>
+          <textarea id="source-code" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Source code" disabled placeholder="Choose a problem to start coding."></textarea>
+        </div>
+        <section id="result-panel" class="result-panel" aria-live="polite">
+          <p class="muted">Submission results will appear here.</p>
+        </section>
+      </section>
+    </main>
+    <script src="app.js" defer></script>
+  </body>
+</html>
