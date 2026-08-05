@@ -1,5 +1,6 @@
 {
   "backend_url": "http://127.0.0.1:38123",
   "runner_port": 37123,
-  "manifest_path": "/v1/runner/manifest"
+  "manifest_path": "/v1/runner/manifest",
+  "demo_user_id": "local-demo-user"
 }

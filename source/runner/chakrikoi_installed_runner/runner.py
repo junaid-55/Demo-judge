@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import argparse, hashlib, json, os, shutil, subprocess, tempfile, threading, time, uuid
+import argparse, fnmatch, hashlib, json, os, shutil, subprocess, tempfile, threading, time, uuid
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -34,8 +34,18 @@ class Service:
         self.base = bootstrap["backend_url"].rstrip("/")
         self.manifest = request_json("GET", self.base + bootstrap["manifest_path"])
         self.origins = set(self.manifest["allowed_origins"])
+        self.user_id = bootstrap.get("demo_user_id", "local-demo-user")
         self.runs, self.lock, self.changed = {}, threading.Lock(), None
         self.changed = threading.Condition(self.lock)
+
+    def accepts_origin(self, origin):
+        return bool(origin) and any(fnmatch.fnmatchcase(origin, pattern) for pattern in self.origins)
+
+    def problems(self):
+        return request_json("GET", self.base + "/v1/problems")
+
+    def problem(self, slug):
+        return request_json("GET", self.base + f"/v1/problems/{slug}")
 
     def start(self, data):
         run_id = str(uuid.uuid4())
@@ -61,9 +71,16 @@ class Service:
 
     def run(self, run_id, data):
         try:
-            slug, language, source, grant = (data[key] for key in ("problem_slug", "language", "source_code", "run_grant"))
+            slug, language, source = (data[key] for key in ("problem_slug", "language", "source_code"))
+            self.set(run_id, "requesting_grant")
+            grant = request_json(
+                "POST", self.base + self.manifest["api_paths"]["grant"],
+                {"problem_slug": slug, "language": language, "source_sha256": hashlib.sha256(source.encode()).hexdigest()},
+                {"X-Demo-User-Id": self.user_id},
+            )["run_grant"]
             self.set(run_id, "fetching_problem")
-            problem = request_json("GET", self.base + f"/v1/local-runs/problems/{slug}", headers={"Authorization": f"Bearer {grant}"})
+            problem_path = self.manifest["api_paths"]["problem"].replace("{slug}", slug)
+            problem = request_json("GET", self.base + problem_path, headers={"Authorization": f"Bearer {grant}"})
             if language not in problem["allowed_languages"] or language not in PROFILES:
                 raise ValueError("unsupported language")
             self.set(run_id, "running")
@@ -127,20 +144,48 @@ def main():
     service = Service(bootstrap)
 
     class Handler(BaseHTTPRequestHandler):
+        def cors_headers(self):
+            origin = self.headers.get("Origin")
+            if service.accepts_origin(origin):
+                self.send_header("Access-Control-Allow-Origin", origin)
+                self.send_header("Vary", "Origin")
+                self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+                self.send_header("Access-Control-Allow-Headers", "Content-Type")
+                self.send_header("Access-Control-Allow-Private-Network", "true")
+
         def send_json(self, status, body):
             data = json.dumps(body).encode()
             self.send_response(status); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(data)))
-            if self.headers.get("Origin") in service.origins: self.send_header("Access-Control-Allow-Origin", self.headers["Origin"])
+            self.cors_headers()
             self.end_headers(); self.wfile.write(data)
+
+        def do_OPTIONS(self):
+            if not service.accepts_origin(self.headers.get("Origin")):
+                return self.send_json(403, {"error": "forbidden"})
+            self.send_response(204)
+            self.cors_headers()
+            self.end_headers()
+
         def do_POST(self):
-            if self.headers.get("Origin") not in service.origins or self.path != "/v1/runs": return self.send_json(403, {"error": "forbidden"})
+            if not service.accepts_origin(self.headers.get("Origin")) or self.path != "/v1/runs": return self.send_json(403, {"error": "forbidden"})
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-            if not all(isinstance(body.get(key), str) and body[key] for key in ("problem_slug", "language", "source_code", "run_grant")): return self.send_json(400, {"error": "missing run fields"})
+            if not all(isinstance(body.get(key), str) and body[key] for key in ("problem_slug", "language", "source_code")): return self.send_json(400, {"error": "missing run fields"})
             self.send_json(202, {"run_id": service.start(body), "status": "queued"})
         def do_GET(self):
             parsed = urlsplit(self.path)
-            if parsed.path == "/v1/health": return self.send_json(200, {"status": "ok", "docker_available": bool(shutil.which("docker"))})
-            if not parsed.path.startswith("/v1/runs/") or self.headers.get("Origin") not in service.origins: return self.send_json(403, {"error": "forbidden"})
+            if parsed.path == "/v1/health":
+                if self.headers.get("Origin") and not service.accepts_origin(self.headers.get("Origin")): return self.send_json(403, {"error": "forbidden"})
+                return self.send_json(200, {"status": "ok", "docker_available": bool(shutil.which("docker"))})
+            if parsed.path == "/v1/problems":
+                if not service.accepts_origin(self.headers.get("Origin")): return self.send_json(403, {"error": "forbidden"})
+                return self.send_json(200, service.problems())
+            if parsed.path.startswith("/v1/problems/"):
+                if not service.accepts_origin(self.headers.get("Origin")): return self.send_json(403, {"error": "forbidden"})
+                try:
+                    return self.send_json(200, service.problem(parsed.path.removeprefix("/v1/problems/")))
+                except Exception as error:
+                    return self.send_json(404, {"error": str(error)})
+            if not parsed.path.startswith("/v1/runs/") or not service.accepts_origin(self.headers.get("Origin")): return self.send_json(403, {"error": "forbidden"})
             status = service.status(parsed.path.removeprefix("/v1/runs/"), int(parse_qs(parsed.query).get("wait", ["0"])[0]))
             self.send_json(200 if status else 404, status or {"error": "not found"})
         def log_message(self, *_): pass

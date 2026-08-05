@@ -105,4 +105,3 @@ elements.source.addEventListener("keydown", event => {
   if (event.key === "Tab") { event.preventDefault(); const { selectionStart, selectionEnd, value } = elements.source; elements.source.value = `${value.slice(0, selectionStart)}  ${value.slice(selectionEnd)}`; elements.source.selectionStart = elements.source.selectionEnd = selectionStart + 2; updateLines(); }
 });
 elements.language.addEventListener("change", () => { elements.source.value = STARTERS[elements.language.value] || ""; updateLines(); });
-connect();

@@ -136,7 +136,7 @@ def init_database() -> None:
                 )
 
 
-def problem_payload(connection: sqlite3.Connection, slug: str, include_expected: bool) -> dict[str, Any] | None:
+def problem_payload(connection: sqlite3.Connection, slug: str, include_expected: bool, include_hidden_tests: bool = True) -> dict[str, Any] | None:
     problem = connection.execute("SELECT * FROM problems WHERE slug=?", (slug,)).fetchone()
     if not problem:
         return None
@@ -155,7 +155,7 @@ def problem_payload(connection: sqlite3.Connection, slug: str, include_expected:
                 **({"expected_output": test["expected_output"]} if include_expected or test["is_sample"] else {}),
                 "is_sample": bool(test["is_sample"]),
             }
-            for test in tests
+            for test in tests if include_hidden_tests or test["is_sample"]
         ],
     }
 
@@ -180,6 +180,21 @@ def manifest():
         },
         expires_at=int(time.time()) + 3600,
     )
+
+
+@APP.get("/v1/problems")
+def public_problem_list():
+    with database() as connection:
+        slugs = connection.execute("SELECT slug FROM problems ORDER BY id").fetchall()
+        problems = [problem_payload(connection, row["slug"], include_expected=False, include_hidden_tests=False) for row in slugs]
+    return jsonify(problems=problems)
+
+
+@APP.get("/v1/problems/<slug>")
+def public_problem(slug: str):
+    with database() as connection:
+        problem = problem_payload(connection, slug, include_expected=False, include_hidden_tests=False)
+    return jsonify(problem) if problem else (jsonify(error="not found"), 404)
 
 
 @APP.post("/v1/local-runs/grants")

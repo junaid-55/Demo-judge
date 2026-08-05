@@ -6,7 +6,9 @@ services:
     environment:
       DATABASE_PATH: /data/chakrikoi.db
       GRANT_SIGNING_SECRET: change-this-before-any-non-local-use
-      RUNNER_ALLOWED_ORIGINS: http://localhost:3000,https://app.chakrikoi.com
+      # The wildcard is interpreted by the local runner, never by the backend.
+      # Replace it with the final Netlify site origin before a non-demo release.
+      RUNNER_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:8888,https://*.netlify.app
     volumes:
       - judge-data:/data
 

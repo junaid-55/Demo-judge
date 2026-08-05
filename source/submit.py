@@ -1,8 +1,8 @@
-"""Request a development grant and submit a source file to the installed runner."""
+"""Submit a source file to the local runner during development."""
 
 from __future__ import annotations
 
-import argparse, hashlib, json
+import argparse, json
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -19,9 +19,7 @@ def call(method, url, body=None, headers=None):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--backend", default="http://127.0.0.1:38123")
 parser.add_argument("--runner", default="http://127.0.0.1:37123")
-parser.add_argument("--user", default="local-student")
 parser.add_argument("--problem", default="count-vowels")
 parser.add_argument("--language", default="cpp")
 parser.add_argument(
@@ -31,16 +29,6 @@ parser.add_argument(
 )
 args = parser.parse_args()
 source = args.file.read_text()
-grant = call(
-    "POST",
-    args.backend + "/v1/local-runs/grants",
-    {
-        "problem_slug": args.problem,
-        "language": args.language,
-        "source_sha256": hashlib.sha256(source.encode()).hexdigest(),
-    },
-    {"X-Demo-User-Id": args.user},
-)["run_grant"]
 run = call(
     "POST",
     args.runner + "/v1/runs",
@@ -48,7 +36,6 @@ run = call(
         "problem_slug": args.problem,
         "language": args.language,
         "source_code": source,
-        "run_grant": grant,
     },
     {"Origin": "http://localhost:3000"},
 )

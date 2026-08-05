@@ -95,13 +95,16 @@ Open another terminal and run:
 
 Replace python and the file path with your language and solution file.
 
-The helper:
+The helper delegates the source to the local runner. The helper does not request or see a run grant. The runner:
 
-1. hashes your source code;
-2. requests a short-lived development grant;
-3. sends source and grant to the local runner;
-4. waits for the runner to fetch public tests and execute Docker;
-5. prints verdict, passed/total tests, per-test runtimes, failed output, and error text.
+1. hashes your source code and requests a short-lived development grant;
+2. fetches tests and executes Docker;
+3. stores the complete result with the backend;
+4. returns verdict, passed/total tests, per-test runtimes, failed output, and error text.
+
+## Browser UI
+
+The same delegated submission flow is available through the static UI in `ui`. Its deployment and local-agent setup are documented in `ui/README.md`.
 
 ## Expected Results
 

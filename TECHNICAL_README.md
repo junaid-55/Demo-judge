@@ -10,6 +10,7 @@
 | source/submit.py | Development submit client and human-readable result report. |
 | source/build.sh | One-command PyInstaller build pipeline. |
 | user_agent | Generated binary plus source-linked runtime files. |
+| ui | Static Netlify UI; it communicates only with the local runner. |
 
 ## Backend API
 
@@ -29,6 +30,12 @@ Request fields:
 
 The current draft uses the X-Demo-User-Id header as an authentication adapter. It returns run_grant, an HMAC-signed token containing user, problem, language, source hash, expiry, audience, and jti.
 
+The browser never calls this API. `Service.run` obtains the grant after the browser has delegated a submission to the loopback runner.
+
+### GET /v1/problems and GET /v1/problems/{slug}
+
+Public catalog endpoints for the local agent. They return statement, limits, language list, and sample tests only. Hidden test input and expected output stay behind the grant-required runner endpoint.
+
 ### GET /v1/local-runs/problems/{slug}
 
 Requires an Authorization Bearer run grant. It returns slug, time_limit_ms, memory_limit_mb, allowed_languages, and all public tests. Each test contains id, input, expected_output, and is_sample.
@@ -39,13 +46,37 @@ Requires the same bearer grant. The runner sends problem_slug, language, source_
 
 Each test_results item has test_case_id, status, runtime_ms, actual_output, and error_output. The backend verifies the grant and source hash, then inserts submissions and submission_test_results in one SQLite transaction. The grant jti is unique, so retrying a lost completion response does not insert a duplicate.
 
+## Loopback Agent API
+
+The user-facing runner binds only to `127.0.0.1`. It permits the exact origins named by the backend manifest; the demo manifest includes `https://*.netlify.app` so a deployed Netlify site can call it. It handles browser `OPTIONS` preflight requests and sends CORS and private-network headers only to allowed origins.
+
+### GET /v1/health
+
+Returns `status` and `docker_available`. The UI uses it before loading a catalog.
+
+### GET /v1/problems and GET /v1/problems/{slug}
+
+Proxies the public backend catalog to an allowed browser origin. This prevents the Netlify app from needing a direct backend connection.
+
+### POST /v1/runs
+
+Browser request fields are `problem_slug`, `language`, and `source_code`. The browser supplies no grant. The runner computes the source hash, requests the grant using its configured local identity, fetches all test expected output with that grant, executes Docker, and posts completion.
+
+The response is `202` with `run_id` and `status: queued`.
+
+### GET /v1/runs/{run_id}?wait=25
+
+Long-polls local status. Intermediate states include `requesting_grant`, `fetching_problem`, and `running`. A completed response includes `result`, including the overall verdict and one result per test.
+
 ## Runner Functions
 
 | Function | Responsibility |
 | --- | --- |
 | Service.__init__ | Loads bootstrap configuration and the backend manifest. |
+| Service.accepts_origin | Matches the manifest allow-list, including the demo Netlify wildcard. |
+| Service.problems / Service.problem | Retrieves UI-safe problem data for the loopback catalog. |
 | Service.start | Allocates a local run ID and starts a worker thread. |
-| Service.run | Fetches problem data, invokes Docker execution, and posts completion. |
+| Service.run | Requests a signed grant, fetches private test data, invokes Docker execution, and posts completion. |
 | Service.execute | Pulls the selected image, compiles once, executes all tests, and computes the verdict. |
 | Service.docker | Creates restricted Docker commands with no network, read-only root, dropped capabilities, temporary filesystem, and workspace mount. |
 | Service.status | Supports long-polling local status with wait=30. |
@@ -55,6 +86,8 @@ Each test_results item has test_case_id, status, runtime_ms, actual_output, and 
 ## Build Pipeline
 
 source/build.sh creates or reuses source/.build-venv, installs a Python-3.14-compatible PyInstaller when needed, packages runner.py into user_agent/chakrikoi-runner, and creates symlinks for bootstrap configuration, submit client, systemd unit, solutions, and source tests.
+
+The `ui` directory has no Node dependency or build step. `ui/netlify.toml` publishes the directory as static files and adds basic browser security headers.
 
 ## Tests
 
