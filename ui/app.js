@@ -126,14 +126,18 @@ function renderResults() {
   const selected = state.result.test_results.find(test => test.test_case_id === state.activeTestId) || failed[0] || passed[0];
   state.activeTestId = selected?.test_case_id ?? null;
   const summary = test => {
-    const value = test.error_output || test.actual_output || statusLabel(test.status);
-    const label = test.error_output ? "Error" : test.actual_output ? "Output" : "Result";
-    return `${label}: ${value.replace(/\s+/g, " ").trim().slice(0, 48)}`;
+    if (test.error_output) return `Error: ${test.error_output.replace(/\s+/g, " ").trim().slice(0, 46)}`;
+    if (test.status === "passed") return `Output: ${(test.actual_output || "(empty)").replace(/\s+/g, " ").trim().slice(0, 45)}`;
+    const expected = test.expected_output === undefined ? "unavailable" : (test.expected_output || "(empty)");
+    const actual = test.actual_output || "(no output)";
+    return `Expected ${expected}; got ${actual}`.replace(/\s+/g, " ").slice(0, 48);
   };
   const list = (tests, empty) => tests.length ? tests.map(test => `<button class="result-test ${state.activeTestId === test.test_case_id ? "selected" : ""}" data-test-id="${test.test_case_id}"><span><strong>Test ${test.test_case_id}</strong><small>${escapeHtml(summary(test))}</small></span><small>${test.runtime_ms} ms</small></button>`).join("") : `<p class="empty-list">${empty}</p>`;
   const detail = selected ? [
     `test ${selected.test_case_id} · ${statusLabel(selected.status)} · ${selected.runtime_ms} ms`,
-    selected.actual_output ? `\nstdout\n${selected.actual_output}` : "",
+    selected.input === undefined ? "" : `\ninput\n${selected.input || "(empty input)"}`,
+    selected.expected_output === undefined ? "" : `\nexpected output\n${selected.expected_output || "(empty output)"}`,
+    `\nactual output\n${selected.actual_output || "(no output)"}`,
     selected.error_output ? `\nstderr\n${selected.error_output}` : "",
   ].filter(Boolean).join("\n") : "No test selected.";
   elements.resultsContent.innerHTML = `<aside class="test-sidebar passed"><h2>Passed <span>${passed.length}</span></h2>${list(passed, "No passing tests")}</aside><aside class="test-sidebar failed"><h2>Failed <span>${failed.length}</span></h2>${list(failed, "No failed tests")}</aside><article class="terminal-output"><header><span class="prompt">judge@local</span><span> ${escapeHtml(state.result.overall_status)}</span></header><pre>${escapeHtml(detail)}</pre></article>`;
