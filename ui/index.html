@@ -3,61 +3,60 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#171a1f" />
+    <meta name="theme-color" content="#eff1f5" />
     <title>Chakrikoi Judge</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <header class="topbar">
+      <button id="sidebar-toggle" class="icon-button" type="button" aria-label="Show problems" title="Problems">☰</button>
       <a class="brand" href="/" aria-label="Chakrikoi Judge home">chakrikoi<span>judge</span></a>
-      <div class="agent-control">
-        <label for="agent-url">Local agent</label>
-        <input id="agent-url" type="url" inputmode="url" value="http://127.0.0.1:37123" aria-describedby="connection-note" />
-        <button id="connect-button" class="secondary" type="button">Connect</button>
-        <span id="connection-status" class="connection waiting">Not checked</span>
+      <div class="agent-indicator" title="Local agent status">
+        <span id="connection-status" class="status-dot waiting" aria-label="Checking local agent"></span>
+        <code>http://127.0.0.1:37123</code>
       </div>
     </header>
 
-    <main class="workspace">
-      <aside class="problem-sidebar" aria-label="Problems">
-        <div class="sidebar-heading">
-          <p class="eyebrow">Practice set</p>
-          <h1>Problems</h1>
-        </div>
-        <div id="problem-list" class="problem-list" aria-live="polite">
-          <p class="muted">Connect the local agent to load problems.</p>
-        </div>
-      </aside>
+    <aside id="problem-sidebar" class="problem-sidebar" aria-label="Problems" aria-hidden="true">
+      <div class="sidebar-heading">
+        <div><p class="eyebrow">Practice set</p><h1>Problems</h1></div>
+        <button id="sidebar-close" class="icon-button" type="button" aria-label="Hide problems" title="Hide problems">×</button>
+      </div>
+      <div id="problem-list" class="problem-list" aria-live="polite"><p class="muted">Loading problems.</p></div>
+    </aside>
+    <div id="sidebar-scrim" class="scrim" hidden></div>
 
+    <main class="workspace">
       <section class="problem-panel" aria-labelledby="problem-title">
         <div id="problem-content" class="empty-problem">
           <p class="eyebrow">Local judging</p>
-          <h2 id="problem-title">Connect your local agent</h2>
-          <p id="connection-note">This site submits code only to the runner on your computer. The runner fetches the problem, private tests, and signed permission from the local backend.</p>
+          <h2 id="problem-title">Preparing workspace</h2>
+          <p>The local runner is being checked.</p>
         </div>
       </section>
 
       <section class="editor-panel" aria-label="Submission editor">
         <div class="editor-toolbar">
-          <div>
-            <p class="eyebrow">Submission</p>
-            <span id="editor-problem" class="editor-problem">No problem selected</span>
-          </div>
-          <label class="language-select" for="language">
-            <span>Language</span>
-            <select id="language" disabled></select>
-          </label>
-          <button id="submit-button" class="submit" type="button" disabled>Submit code</button>
+          <span id="editor-problem" class="editor-problem">No problem selected</span>
+          <select id="language" aria-label="Programming language" disabled></select>
+          <button id="results-button" class="results-button neutral" type="button" title="Results" aria-label="Open results" disabled>Results</button>
+          <button id="submit-button" class="submit" type="button" disabled>Submit</button>
         </div>
         <div class="editor-shell">
           <div id="line-numbers" class="line-numbers" aria-hidden="true">1</div>
           <textarea id="source-code" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Source code" disabled placeholder="Choose a problem to start coding."></textarea>
         </div>
-        <section id="result-panel" class="result-panel" aria-live="polite">
-          <p class="muted">Submission results will appear here.</p>
-        </section>
       </section>
     </main>
+
+    <section id="results-drawer" class="results-drawer" aria-label="Submission results" aria-hidden="true">
+      <header class="terminal-titlebar">
+        <span class="terminal-lamp"></span><span class="terminal-lamp"></span><span class="terminal-lamp"></span>
+        <strong>Submission results</strong>
+        <button id="results-close" class="icon-button" type="button" aria-label="Close results" title="Close results">×</button>
+      </header>
+      <div id="results-content" class="results-content" aria-live="polite"></div>
+    </section>
     <script src="app.js" defer></script>
   </body>
 </html>
