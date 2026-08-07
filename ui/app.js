@@ -8,10 +8,11 @@ const STARTERS = {
   java: "public class solution {\n    public static void main(String[] args) throws Exception {\n        // Write your solution here.\n    }\n}\n",
 };
 
-const state = { problems: [], selected: null, runId: null, result: null, failure: null, activeTestId: null, retryTimer: null, connecting: false };
+const state = { problems: [], selected: null, runId: null, result: null, failure: null, activeTestId: null, retryTimer: null, connecting: false, theme: localStorage.getItem("chakrikoi-theme") || "latte" };
 const elements = {
   status: document.querySelector("#connection-status"), sidebar: document.querySelector("#problem-sidebar"), scrim: document.querySelector("#sidebar-scrim"),
   sidebarToggle: document.querySelector("#sidebar-toggle"), sidebarClose: document.querySelector("#sidebar-close"), list: document.querySelector("#problem-list"),
+  reconnect: document.querySelector("#reconnect-button"), themeToggle: document.querySelector("#theme-toggle"),
   content: document.querySelector("#problem-content"), editorProblem: document.querySelector("#editor-problem"), language: document.querySelector("#language"),
   source: document.querySelector("#source-code"), lines: document.querySelector("#line-numbers"), submit: document.querySelector("#submit-button"),
   resultsButton: document.querySelector("#results-button"), resultsDrawer: document.querySelector("#results-drawer"), resultsContent: document.querySelector("#results-content"), resultsClose: document.querySelector("#results-close"),
@@ -23,6 +24,12 @@ function updateLines() { elements.lines.textContent = Array.from({ length: eleme
 function setConnection(kind) { elements.status.className = `status-dot ${kind}`; elements.status.setAttribute("aria-label", `${kind} local agent`); }
 function setSidebar(open) { elements.sidebar.classList.toggle("is-open", open); elements.sidebar.setAttribute("aria-hidden", String(!open)); elements.scrim.hidden = !open; }
 function setResults(open) { elements.resultsDrawer.classList.toggle("is-open", open); elements.resultsDrawer.setAttribute("aria-hidden", String(!open)); if (open) renderResults(); }
+function applyTheme() {
+  document.body.dataset.theme = state.theme;
+  const next = state.theme === "latte" ? "Macchiato" : "Latte";
+  elements.themeToggle.setAttribute("aria-label", `Switch to ${next} theme`);
+  elements.themeToggle.title = `Switch to ${next} theme`;
+}
 
 async function request(path, options = {}) {
   const response = await fetch(`${AGENT_URL}${path}`, { ...options, headers: { "Content-Type": "application/json", ...(options.headers || {}) } });
@@ -67,7 +74,7 @@ function renderFailure(message) {
 
 async function connect() {
   if (state.connecting) return;
-  state.connecting = true; setConnection("waiting");
+  state.connecting = true; elements.reconnect.disabled = true; setConnection("waiting");
   try {
     const health = await request("/v1/health");
     if (!health.docker_available) throw new Error("Docker is not available to the local agent");
@@ -83,7 +90,7 @@ async function connect() {
     elements.content.className = "empty-problem";
     elements.content.innerHTML = `<p class="eyebrow">Connection error</p><h2 id="problem-title">Runner unavailable</h2><p>${escapeHtml(error.message)}</p>`;
     clearTimeout(state.retryTimer); state.retryTimer = setTimeout(connect, 5000);
-  } finally { state.connecting = false; }
+  } finally { state.connecting = false; elements.reconnect.disabled = false; }
 }
 
 function resultKind(result) {
@@ -141,6 +148,8 @@ async function submit() {
 elements.sidebarToggle.addEventListener("click", () => setSidebar(true));
 elements.sidebarClose.addEventListener("click", () => setSidebar(false));
 elements.scrim.addEventListener("click", () => setSidebar(false));
+elements.reconnect.addEventListener("click", () => connect());
+elements.themeToggle.addEventListener("click", () => { state.theme = state.theme === "latte" ? "macchiato" : "latte"; localStorage.setItem("chakrikoi-theme", state.theme); applyTheme(); });
 elements.resultsButton.addEventListener("click", () => setResults(true));
 elements.resultsClose.addEventListener("click", () => setResults(false));
 elements.submit.addEventListener("click", submit);
@@ -149,4 +158,5 @@ elements.source.addEventListener("keydown", event => {
   if (event.key === "Tab") { event.preventDefault(); const { selectionStart, selectionEnd, value } = elements.source; elements.source.value = `${value.slice(0, selectionStart)}  ${value.slice(selectionEnd)}`; elements.source.selectionStart = elements.source.selectionEnd = selectionStart + 2; updateLines(); }
 });
 elements.language.addEventListener("change", () => { elements.source.value = STARTERS[elements.language.value] || ""; updateLines(); });
+applyTheme();
 connect();
