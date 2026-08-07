@@ -34,7 +34,7 @@ The browser never calls this API. `Service.run` obtains the grant after the brow
 
 ### GET /v1/problems and GET /v1/problems/{slug}
 
-Public catalog endpoints for the local agent. They return statement, limits, language list, and sample tests only. Hidden test input and expected output stay behind the grant-required runner endpoint.
+Public catalog endpoints used directly by the browser UI. They return statement, limits, language list, and sample tests only. Hidden test input and expected output stay behind the grant-required runner endpoint. These endpoints add CORS only for origins allowed by the backend configuration.
 
 ### GET /v1/local-runs/problems/{slug}
 
@@ -52,11 +52,7 @@ The user-facing runner binds only to `127.0.0.1`. It permits the exact origins n
 
 ### GET /v1/health
 
-Returns `status` and `docker_available`. The UI uses it before loading a catalog.
-
-### GET /v1/problems and GET /v1/problems/{slug}
-
-Proxies the public backend catalog to an allowed browser origin. This prevents the Netlify app from needing a direct backend connection.
+Returns `status` and `docker_available`. The UI uses it to indicate whether local submission execution is available.
 
 ### POST /v1/runs
 
@@ -66,7 +62,7 @@ The response is `202` with `run_id` and `status: queued`.
 
 ### GET /v1/runs/{run_id}?wait=25
 
-Long-polls local status. Intermediate states include `requesting_grant`, `fetching_problem`, and `running`. A completed response includes `result`, including the overall verdict and one result per test.
+Long-polls local status. Intermediate states include `requesting_grant`, `fetching_problem`, and `running`. A completed response includes `result`, including the overall verdict and one result per test. In the current diagnostic mode, each local result includes its input, expected output, actual output, and captured error output; only the existing persisted result fields are sent to backend completion.
 
 ## Runner Functions
 
@@ -74,10 +70,10 @@ Long-polls local status. Intermediate states include `requesting_grant`, `fetchi
 | --- | --- |
 | Service.__init__ | Loads bootstrap configuration and the backend manifest. |
 | Service.accepts_origin | Matches the manifest allow-list, including the demo Netlify wildcard. |
-| Service.problems / Service.problem | Retrieves UI-safe problem data for the loopback catalog. |
 | Service.start | Allocates a local run ID and starts a worker thread. |
 | Service.run | Requests a signed grant, fetches private test data, invokes Docker execution, and posts completion. |
 | Service.execute | Pulls the selected image, compiles once, executes all tests, and computes the verdict. |
+| Service.ensure_image | Pulls a missing Docker runtime automatically, retrying once before reporting Docker's error. |
 | Service.docker | Creates restricted Docker commands with no network, read-only root, dropped capabilities, temporary filesystem, and workspace mount. |
 | Service.status | Supports long-polling local status with wait=30. |
 | request_json | Performs backend HTTP requests. |

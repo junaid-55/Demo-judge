@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import fnmatch
 import hashlib
 import hmac
 import json
@@ -21,6 +22,24 @@ DATABASE_PATH = os.environ.get("DATABASE_PATH", "/data/chakrikoi.db")
 SIGNING_SECRET = os.environ.get("GRANT_SIGNING_SECRET", "").encode()
 if len(SIGNING_SECRET) < 32:
     raise RuntimeError("GRANT_SIGNING_SECRET must be at least 32 characters")
+
+
+def allowed_browser_origin(origin: str | None) -> bool:
+    patterns = [item for item in os.environ.get("RUNNER_ALLOWED_ORIGINS", "").split(",") if item]
+    return bool(origin) and any(fnmatch.fnmatchcase(origin, pattern) for pattern in patterns)
+
+
+@APP.after_request
+def public_problem_cors(response):
+    """Allow the deployed UI to read public problem metadata from this backend."""
+    origin = request.headers.get("Origin")
+    if request.path.startswith("/v1/problems") and allowed_browser_origin(origin):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+        response.headers["Vary"] = "Origin"
+    return response
 
 
 def b64_encode(value: bytes) -> str:

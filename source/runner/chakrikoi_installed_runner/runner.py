@@ -41,12 +41,6 @@ class Service:
     def accepts_origin(self, origin):
         return bool(origin) and any(fnmatch.fnmatchcase(origin, pattern) for pattern in self.origins)
 
-    def problems(self):
-        return request_json("GET", self.base + "/v1/problems")
-
-    def problem(self, slug):
-        return request_json("GET", self.base + f"/v1/problems/{slug}")
-
     def start(self, data):
         run_id = str(uuid.uuid4())
         with self.changed:
@@ -83,24 +77,49 @@ class Service:
             problem = request_json("GET", self.base + problem_path, headers={"Authorization": f"Bearer {grant}"})
             if language not in problem["allowed_languages"] or language not in PROFILES:
                 raise ValueError("unsupported language")
+            image = self.manifest["images"][language]
+            result = self.execute(
+                language, source, problem, image,
+                lambda detail: self.set(run_id, "preparing_runtime", detail),
+            )
             self.set(run_id, "running")
-            result = self.execute(language, source, problem, self.manifest["images"][language])
+            completion_result = {
+                **result,
+                "test_results": [
+                    {field: item[field] for field in ("test_case_id", "status", "runtime_ms", "actual_output", "error_output")}
+                    for item in result["test_results"]
+                ],
+            }
             payload = {
                 "problem_slug": slug, "language": language, "source_code": source,
-                "docker_image": self.manifest["images"][language], "client_version": "installed-draft-0.1",
-                **result,
+                "docker_image": image, "client_version": "installed-draft-0.1",
+                **completion_result,
             }
             request_json("POST", self.base + "/v1/local-runs/complete", payload, {"Authorization": f"Bearer {grant}"})
             self.set(run_id, "completed", result["overall_status"], result)
         except Exception as error:
             self.set(run_id, "failed", str(error))
 
-    def execute(self, language, source, problem, image):
+    def ensure_image(self, image, progress):
+        if subprocess.run(["docker", "image", "inspect", image], capture_output=True).returncode == 0:
+            return
+        errors = []
+        for attempt in range(1, 3):
+            progress(f"Downloading runtime {image} (attempt {attempt}/2)")
+            pulled = subprocess.run(["docker", "pull", image], text=True, capture_output=True)
+            if pulled.returncode == 0:
+                return
+            errors.append((pulled.stderr or pulled.stdout or "Docker returned no error output").strip())
+            if attempt == 1:
+                time.sleep(2)
+        detail = errors[-1]
+        raise RuntimeError(f"Could not download runtime image {image} after 2 attempts: {detail}")
+
+    def execute(self, language, source, problem, image, progress=lambda _detail: None):
         extension, compile_cmd, run_cmd = PROFILES[language]
         if shutil.which("docker") is None:
             raise RuntimeError("Docker is not available")
-        if subprocess.run(["docker", "image", "inspect", image], capture_output=True).returncode:
-            subprocess.run(["docker", "pull", image], check=True)
+        self.ensure_image(image, progress)
         results = []
         with tempfile.TemporaryDirectory(prefix="chakrikoi-installed-") as directory:
             os.chmod(directory, 0o777)
@@ -110,7 +129,7 @@ class Service:
             if compile_cmd:
                 compiled = self.docker(image, directory, compile_cmd, False, "", 20)
                 if compiled.returncode:
-                    results = [self.result(test, "compile_error", 0, "", compiled.stderr) for test in problem["tests"]]
+                    results = [self.result(test, "compile_error", 0, "", compiled.stderr, compiled.returncode) for test in problem["tests"]]
             if not results:
                 for test in problem["tests"]:
                     started = time.monotonic()
@@ -118,17 +137,21 @@ class Service:
                         completed = self.docker(image, directory, run_cmd, True, test["input"], problem["time_limit_ms"] / 1000 + 2)
                         elapsed = round((time.monotonic() - started) * 1000)
                         status = "passed" if completed.returncode == 0 and normalized(completed.stdout) == normalized(test["expected_output"]) else "runtime_error" if completed.returncode else "failed"
-                        results.append(self.result(test, status, elapsed, completed.stdout, completed.stderr))
+                        results.append(self.result(test, status, elapsed, completed.stdout, completed.stderr, completed.returncode))
                     except subprocess.TimeoutExpired as error:
-                        results.append(self.result(test, "time_limit_exceeded", round((time.monotonic() - started) * 1000), "", str(error)))
+                        results.append(self.result(test, "time_limit_exceeded", round((time.monotonic() - started) * 1000), "", str(error), None))
         passed = sum(item["status"] == "passed" for item in results)
         statuses = {item["status"] for item in results}
         overall = "accepted" if passed == len(results) else "compile_error" if "compile_error" in statuses else "time_limit_exceeded" if "time_limit_exceeded" in statuses else "runtime_error" if "runtime_error" in statuses else "partial" if passed else "wrong_answer"
         return {"overall_status": overall, "total_test_cases": len(results), "passed_test_cases": passed, "max_runtime_ms": max((item["runtime_ms"] for item in results), default=0), "test_results": results}
 
     @staticmethod
-    def result(test, status, runtime, output, error):
-        return {"test_case_id": test["id"], "status": status, "runtime_ms": runtime, "actual_output": output[:1048576], "error_output": error[:1048576]}
+    def result(test, status, runtime, output, error, exit_code=None):
+        return {
+            "test_case_id": test["id"], "status": status, "runtime_ms": runtime,
+            "input": test["input"][:1048576], "expected_output": test["expected_output"][:1048576],
+            "actual_output": output[:1048576], "error_output": error[:1048576], "exit_code": exit_code,
+        }
 
     @staticmethod
     def docker(image, directory, command, readonly, input_data, timeout):
@@ -176,15 +199,6 @@ def main():
             if parsed.path == "/v1/health":
                 if self.headers.get("Origin") and not service.accepts_origin(self.headers.get("Origin")): return self.send_json(403, {"error": "forbidden"})
                 return self.send_json(200, {"status": "ok", "docker_available": bool(shutil.which("docker"))})
-            if parsed.path == "/v1/problems":
-                if not service.accepts_origin(self.headers.get("Origin")): return self.send_json(403, {"error": "forbidden"})
-                return self.send_json(200, service.problems())
-            if parsed.path.startswith("/v1/problems/"):
-                if not service.accepts_origin(self.headers.get("Origin")): return self.send_json(403, {"error": "forbidden"})
-                try:
-                    return self.send_json(200, service.problem(parsed.path.removeprefix("/v1/problems/")))
-                except Exception as error:
-                    return self.send_json(404, {"error": str(error)})
             if not parsed.path.startswith("/v1/runs/") or not service.accepts_origin(self.headers.get("Origin")): return self.send_json(403, {"error": "forbidden"})
             status = service.status(parsed.path.removeprefix("/v1/runs/"), int(parse_qs(parsed.query).get("wait", ["0"])[0]))
             self.send_json(200 if status else 404, status or {"error": "not found"})

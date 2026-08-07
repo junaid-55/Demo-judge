@@ -135,10 +135,11 @@ function renderResults() {
   const list = (tests, empty) => tests.length ? tests.map(test => `<button class="result-test ${state.activeTestId === test.test_case_id ? "selected" : ""}" data-test-id="${test.test_case_id}"><span><strong>Test ${test.test_case_id}</strong><small>${escapeHtml(summary(test))}</small></span><small>${test.runtime_ms} ms</small></button>`).join("") : `<p class="empty-list">${empty}</p>`;
   const detail = selected ? [
     `test ${selected.test_case_id} · ${statusLabel(selected.status)} · ${selected.runtime_ms} ms`,
+    `\nexecution\nexit code: ${selected.exit_code === undefined || selected.exit_code === null ? "not available" : selected.exit_code}`,
     selected.input === undefined ? "" : `\ninput\n${selected.input || "(empty input)"}`,
     selected.expected_output === undefined ? "" : `\nexpected output\n${selected.expected_output || "(empty output)"}`,
     `\nactual output\n${selected.actual_output || "(no output)"}`,
-    selected.error_output ? `\nstderr\n${selected.error_output}` : "",
+    `\nstderr\n${selected.error_output || (selected.exit_code === 0 ? "(no traceback; process exited normally)" : "(no stderr captured)")}`,
   ].filter(Boolean).join("\n") : "No test selected.";
   elements.resultsContent.innerHTML = `<aside class="test-sidebar passed"><h2>Passed <span>${passed.length}</span></h2>${list(passed, "No passing tests")}</aside><aside class="test-sidebar failed"><h2>Failed <span>${failed.length}</span></h2>${list(failed, "No failed tests")}</aside><article class="terminal-output"><header><span class="prompt">judge@local</span><span> ${escapeHtml(state.result.overall_status)}</span></header><pre>${escapeHtml(detail)}</pre></article>`;
   elements.resultsContent.querySelectorAll("[data-test-id]").forEach(button => button.addEventListener("click", () => { state.activeTestId = Number(button.dataset.testId); renderResults(); }));
