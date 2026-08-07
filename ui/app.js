@@ -127,7 +127,8 @@ function renderResults() {
   state.activeTestId = selected?.test_case_id ?? null;
   const summary = test => {
     const value = test.error_output || test.actual_output || statusLabel(test.status);
-    return value.replace(/\s+/g, " ").trim().slice(0, 52);
+    const label = test.error_output ? "Error" : test.actual_output ? "Output" : "Result";
+    return `${label}: ${value.replace(/\s+/g, " ").trim().slice(0, 48)}`;
   };
   const list = (tests, empty) => tests.length ? tests.map(test => `<button class="result-test ${state.activeTestId === test.test_case_id ? "selected" : ""}" data-test-id="${test.test_case_id}"><span><strong>Test ${test.test_case_id}</strong><small>${escapeHtml(summary(test))}</small></span><small>${test.runtime_ms} ms</small></button>`).join("") : `<p class="empty-list">${empty}</p>`;
   const detail = selected ? [
@@ -168,7 +169,7 @@ elements.sidebarClose.addEventListener("click", () => setSidebar(false));
 elements.scrim.addEventListener("click", () => setSidebar(false));
 elements.reconnect.addEventListener("click", () => connect());
 elements.themeToggle.addEventListener("click", () => { state.theme = state.theme === "latte" ? "macchiato" : "latte"; localStorage.setItem("chakrikoi-theme", state.theme); applyTheme(); });
-elements.resultsButton.addEventListener("click", () => setResults(true));
+elements.resultsButton.addEventListener("click", () => setResults(!elements.resultsDrawer.classList.contains("is-open")));
 elements.resultsClose.addEventListener("click", () => setResults(false));
 elements.submit.addEventListener("click", submit);
 elements.source.addEventListener("input", updateLines);
