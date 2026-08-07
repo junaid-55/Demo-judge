@@ -20,6 +20,8 @@
   --dot-green: #40a02b;
   --online-halo: #d8edd2;
   --offline-halo: #f5d3d9;
+  --header-control-bg: #7c7f93;
+  --header-control-fg: #ffffff;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -45,6 +47,8 @@ body[data-theme="macchiato"] {
   --dot-green: #a6da95;
   --online-halo: #384c3b;
   --offline-halo: #563b49;
+  --header-control-bg: #cad3f5;
+  --header-control-fg: #24273a;
 }
 
 * { box-sizing: border-box; }
@@ -58,6 +62,8 @@ button:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opaci
 .icon-button { display: grid; width: 32px; height: 32px; padding: 0; place-items: center; color: var(--text); border: 1px solid transparent; border-radius: 4px; background: transparent; font-size: 20px; line-height: 1; }
 .icon-button:hover { border-color: var(--surface-2); background: var(--crust); }
 .icon-button.compact { width: 28px; height: 28px; font-size: 16px; }
+#reconnect-button, #theme-toggle { color: var(--header-control-fg); border-color: transparent; background: var(--header-control-bg); }
+#reconnect-button:hover:not(:disabled), #theme-toggle:hover { filter: brightness(.94); background: var(--header-control-bg); }
 .agent-indicator { display: flex; align-items: center; gap: 8px; margin-left: auto; color: var(--subtext); font-size: 12px; }
 .agent-indicator code { color: var(--subtext); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .status-dot { width: 9px; height: 9px; border-radius: 999px; background: var(--surface-2); box-shadow: 0 0 0 3px var(--crust); }
