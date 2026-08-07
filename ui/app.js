@@ -1,4 +1,5 @@
 const AGENT_URL = "http://127.0.0.1:37123";
+const BACKEND_URL = "http://127.0.0.1:38123";
 const LANGUAGE_LABELS = { python: "Python", c: "C", cpp: "C++", javascript: "JavaScript", java: "Java" };
 const STARTERS = {
   python: "import sys\n\n\ndef solve():\n    # Write your solution here.\n    pass\n\n\nif __name__ == '__main__':\n    solve()\n",
@@ -38,6 +39,13 @@ async function request(path, options = {}) {
   return body;
 }
 
+async function backendRequest(path) {
+  const response = await fetch(`${BACKEND_URL}${path}`, { headers: { "Content-Type": "application/json" } });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || `Problem server returned HTTP ${response.status}`);
+  return body;
+}
+
 function updateResultsButton(kind = "neutral") {
   elements.resultsButton.className = `results-button ${kind}`;
   elements.resultsButton.disabled = !state.result && !state.failure && !state.runId;
@@ -57,7 +65,7 @@ function renderProblem(problem) {
 
 async function selectProblem(slug) {
   try {
-    const problem = await request(`/v1/problems/${encodeURIComponent(slug)}`);
+    const problem = await backendRequest(`/v1/problems/${encodeURIComponent(slug)}`);
     state.selected = problem; state.result = null; state.failure = null; state.runId = null; state.activeTestId = null;
     renderProblems(); renderProblem(problem); setSidebar(false); updateResultsButton();
     elements.editorProblem.textContent = problem.title;
@@ -79,18 +87,24 @@ async function connect() {
     const health = await request("/v1/health");
     if (!health.docker_available) throw new Error("Docker is not available to the local agent");
     setConnection("online");
-    const catalog = await request("/v1/problems");
+  } catch (error) {
+    setConnection("offline");
+    clearTimeout(state.retryTimer); state.retryTimer = setTimeout(connect, 5000);
+  } finally { state.connecting = false; elements.reconnect.disabled = false; }
+}
+
+async function loadProblems() {
+  try {
+    const catalog = await backendRequest("/v1/problems");
     state.problems = catalog.problems || [];
     if (!state.problems.length) throw new Error("The backend has no problems");
     renderProblems();
     await selectProblem(state.problems[0].slug);
   } catch (error) {
-    setConnection("offline");
-    elements.list.innerHTML = '<p class="muted">Local agent unavailable.</p>';
+    elements.list.innerHTML = '<p class="muted">Problem server unavailable.</p>';
     elements.content.className = "empty-problem";
-    elements.content.innerHTML = `<p class="eyebrow">Connection error</p><h2 id="problem-title">Runner unavailable</h2><p>${escapeHtml(error.message)}</p>`;
-    clearTimeout(state.retryTimer); state.retryTimer = setTimeout(connect, 5000);
-  } finally { state.connecting = false; elements.reconnect.disabled = false; }
+    elements.content.innerHTML = `<p class="eyebrow">Problem server</p><h2 id="problem-title">Problems unavailable</h2><p>${escapeHtml(error.message)}</p>`;
+  }
 }
 
 function resultKind(result) {
@@ -111,13 +125,17 @@ function renderResults() {
   const failed = state.result.test_results.filter(test => test.status !== "passed");
   const selected = state.result.test_results.find(test => test.test_case_id === state.activeTestId) || failed[0] || passed[0];
   state.activeTestId = selected?.test_case_id ?? null;
-  const list = (tests, kind, empty) => tests.length ? tests.map(test => `<button class="result-test ${state.activeTestId === test.test_case_id ? "selected" : ""}" data-test-id="${test.test_case_id}"><span>Test ${test.test_case_id}</span><small>${test.runtime_ms} ms</small></button>`).join("") : `<p class="empty-list">${empty}</p>`;
+  const summary = test => {
+    const value = test.error_output || test.actual_output || statusLabel(test.status);
+    return value.replace(/\s+/g, " ").trim().slice(0, 52);
+  };
+  const list = (tests, empty) => tests.length ? tests.map(test => `<button class="result-test ${state.activeTestId === test.test_case_id ? "selected" : ""}" data-test-id="${test.test_case_id}"><span><strong>Test ${test.test_case_id}</strong><small>${escapeHtml(summary(test))}</small></span><small>${test.runtime_ms} ms</small></button>`).join("") : `<p class="empty-list">${empty}</p>`;
   const detail = selected ? [
     `test ${selected.test_case_id} · ${statusLabel(selected.status)} · ${selected.runtime_ms} ms`,
     selected.actual_output ? `\nstdout\n${selected.actual_output}` : "",
     selected.error_output ? `\nstderr\n${selected.error_output}` : "",
   ].filter(Boolean).join("\n") : "No test selected.";
-  elements.resultsContent.innerHTML = `<aside class="test-sidebar passed"><h2>Passed <span>${passed.length}</span></h2>${list(passed, "passed", "No passing tests")}</aside><aside class="test-sidebar failed"><h2>Failed <span>${failed.length}</span></h2>${list(failed, "failed", "No failed tests")}</aside><article class="terminal-output"><header><span class="prompt">judge@local</span><span> ${escapeHtml(state.result.overall_status)}</span></header><pre>${escapeHtml(detail)}</pre></article>`;
+  elements.resultsContent.innerHTML = `<aside class="test-sidebar passed"><h2>Passed <span>${passed.length}</span></h2>${list(passed, "No passing tests")}</aside><aside class="test-sidebar failed"><h2>Failed <span>${failed.length}</span></h2>${list(failed, "No failed tests")}</aside><article class="terminal-output"><header><span class="prompt">judge@local</span><span> ${escapeHtml(state.result.overall_status)}</span></header><pre>${escapeHtml(detail)}</pre></article>`;
   elements.resultsContent.querySelectorAll("[data-test-id]").forEach(button => button.addEventListener("click", () => { state.activeTestId = Number(button.dataset.testId); renderResults(); }));
 }
 
@@ -159,4 +177,5 @@ elements.source.addEventListener("keydown", event => {
 });
 elements.language.addEventListener("change", () => { elements.source.value = STARTERS[elements.language.value] || ""; updateLines(); });
 applyTheme();
+loadProblems();
 connect();
