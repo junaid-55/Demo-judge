@@ -198,7 +198,7 @@ class Service:
                 restored = self.sql_command(session["container"], "problem_base", problem["sql_fixture"])
                 if restored.returncode:
                     raise RuntimeError(restored.stderr or "could not restore SQL fixture")
-                permissions = self.sql_command(session["container"], "problem_base", "CREATE ROLE solver LOGIN PASSWORD 'solver'; GRANT CONNECT ON DATABASE problem_base TO solver; GRANT USAGE ON SCHEMA public TO solver; GRANT SELECT ON ALL TABLES IN SCHEMA public TO solver;")
+                permissions = self.sql_command(session["container"], "problem_base", "CREATE ROLE solver LOGIN PASSWORD 'solver'; GRANT CONNECT ON DATABASE problem_base TO solver; GRANT USAGE ON SCHEMA public TO solver; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO solver; GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO solver;")
                 if permissions.returncode:
                     raise RuntimeError(permissions.stderr or "could not configure SQL runner permissions")
             except Exception:

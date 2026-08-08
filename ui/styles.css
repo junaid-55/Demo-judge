@@ -50,7 +50,13 @@ body[data-theme="macchiato"] {
   --header-control-fg: #24273a;
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--surface-2) transparent; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+*:hover::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { min-height: 28px; border: 2px solid transparent; border-radius: 999px; background: var(--surface-2); background-clip: padding-box; }
+*:hover::-webkit-scrollbar-thumb { border-width: 1px; background-color: var(--subtext); }
+::-webkit-scrollbar-corner { background: transparent; }
 body { min-width: 320px; min-height: 100vh; margin: 0; color: var(--text); background: var(--base); }
 button, select, textarea { font: inherit; }
 button { cursor: pointer; }

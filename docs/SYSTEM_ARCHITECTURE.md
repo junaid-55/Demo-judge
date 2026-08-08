@@ -57,7 +57,7 @@ For the current local demo, the UI calls `http://127.0.0.1:38123`. In production
    Authorization: Bearer <run grant>
 
 4. Local agent -> Docker
-   Pulls a missing language image, compiles once, executes every test. For SQL, it starts a reusable PostgreSQL container, restores the fixture to `problem_base`, clones that database for each test delta, runs the submitted query as the read-only `solver` role, then drops the clone.
+   Pulls a missing language image, compiles once, executes every test. For SQL, it starts a reusable PostgreSQL container, restores the fixture to `problem_base`, clones that database for each test delta, runs the submitted SQL as the `solver` role, then drops the clone.
 
 5. Local agent -> backend
    POST /v1/local-runs/complete
@@ -80,7 +80,7 @@ The SQL notebook tracks passed cells in the browser session. Zero passed cells i
 - The local agent binds only to `127.0.0.1`; it is not reachable from the network.
 - Browser origins are checked before the local agent accepts a submission request.
 - A short-lived HMAC-signed grant binds one user, problem, language, and exact source hash.
-- Program containers have no network, a read-only root filesystem, dropped Linux capabilities, and an isolated temporary workspace. PostgreSQL has a writable temporary data volume for initialization, no network, and runs submitted SQL through a read-only database role.
+- Program containers have no network, a read-only root filesystem, dropped Linux capabilities, and an isolated temporary workspace. PostgreSQL has a writable temporary data volume for initialization and no network. SQL cells may change only their disposable cloned test database; `problem_base` is never written by submitted SQL.
 - The database rejects an exact repeat for the same user, problem, language, and `source_sha256`. A duplicate completion returns the existing submission ID without creating another row.
 
 The current diagnostic mode intentionally returns all executed test data to the local browser after a run. For a production judge that needs hidden tests to remain secret, return only public-test detail and aggregate verdicts for hidden tests.
