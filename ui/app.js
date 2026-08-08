@@ -10,7 +10,7 @@ const STARTERS = {
   sql: "-- Write one SELECT query here.\n",
 };
 
-const state = { problems: [], selected: null, runId: null, result: null, failure: null, activeTestId: null, retryTimer: null, connecting: false, theme: localStorage.getItem("chakrikoi-theme") || "latte", sqlCells: {}, sqlProblemSlug: null };
+const state = { problems: [], selected: null, runId: null, result: null, failure: null, activeTestId: null, connecting: false, theme: localStorage.getItem("chakrikoi-theme") || "latte", sqlCells: {}, sqlProblemSlug: null };
 const elements = {
   status: document.querySelector("#connection-status"), sidebar: document.querySelector("#problem-sidebar"), scrim: document.querySelector("#sidebar-scrim"),
   sidebarToggle: document.querySelector("#sidebar-toggle"), sidebarClose: document.querySelector("#sidebar-close"), list: document.querySelector("#problem-list"),
@@ -161,7 +161,6 @@ async function connect() {
     setConnection("online");
   } catch (error) {
     setConnection("offline");
-    clearTimeout(state.retryTimer); state.retryTimer = setTimeout(connect, 5000);
   } finally { state.connecting = false; elements.reconnect.disabled = false; }
 }
 
@@ -244,7 +243,7 @@ async function submit() {
 elements.sidebarToggle.addEventListener("click", () => setSidebar(true));
 elements.sidebarClose.addEventListener("click", () => setSidebar(false));
 elements.scrim.addEventListener("click", () => setSidebar(false));
-elements.reconnect.addEventListener("click", () => connect());
+elements.reconnect.addEventListener("click", () => { connect(); loadProblems(); });
 elements.themeToggle.addEventListener("click", () => { state.theme = state.theme === "latte" ? "macchiato" : "latte"; localStorage.setItem("chakrikoi-theme", state.theme); applyTheme(); });
 elements.resultsButton.addEventListener("click", () => setResults(!elements.resultsDrawer.classList.contains("is-open")));
 elements.resultsClose.addEventListener("click", () => setResults(false));
