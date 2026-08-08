@@ -104,7 +104,9 @@ def create_schema(connection: sqlite3.Connection) -> None:
           title TEXT NOT NULL,
           statement TEXT NOT NULL,
           time_limit_ms INTEGER NOT NULL,
-          memory_limit_mb INTEGER NOT NULL
+          memory_limit_mb INTEGER NOT NULL,
+          sql_schema TEXT,
+          sql_fixture TEXT
         );
         CREATE TABLE IF NOT EXISTS problem_languages (
           problem_id INTEGER NOT NULL REFERENCES problems(id),
@@ -115,7 +117,8 @@ def create_schema(connection: sqlite3.Connection) -> None:
           id INTEGER PRIMARY KEY,
           problem_id INTEGER NOT NULL REFERENCES problems(id),
           input TEXT NOT NULL,
-          expected_output TEXT NOT NULL
+          expected_output TEXT NOT NULL,
+          sql_delta TEXT NOT NULL DEFAULT ''
         );
         CREATE TABLE IF NOT EXISTS submissions (
           id INTEGER PRIMARY KEY,
@@ -200,18 +203,29 @@ def init_database() -> None:
         if "grant_jti" in submission_columns:
             migrate_grant_jti_schema(connection)
         create_schema(connection)
+        problem_columns = {row["name"] for row in connection.execute("PRAGMA table_info(problems)")}
+        if "sql_fixture" not in problem_columns:
+            connection.execute("ALTER TABLE problems ADD COLUMN sql_fixture TEXT")
+        if "sql_schema" not in problem_columns:
+            connection.execute("ALTER TABLE problems ADD COLUMN sql_schema TEXT")
+        test_columns = {row["name"] for row in connection.execute("PRAGMA table_info(test_cases)")}
+        if "sql_delta" not in test_columns:
+            connection.execute("ALTER TABLE test_cases ADD COLUMN sql_delta TEXT NOT NULL DEFAULT ''")
         seed = json.loads(Path(__file__).with_name("seed_problems.json").read_text(encoding="utf-8"))
         for language in seed["languages"]:
             connection.execute("INSERT OR IGNORE INTO languages(language_name,docker_image) VALUES(?,?)", (language["language_name"], language["docker_image"]))
         for problem in seed["problems"]:
-            connection.execute("INSERT OR IGNORE INTO problems(slug,title,statement,time_limit_ms,memory_limit_mb) VALUES(?,?,?,?,?)", (problem["slug"], problem["title"], problem["statement"], problem["time_limit_ms"], problem["memory_limit_mb"]))
+            connection.execute("""INSERT OR IGNORE INTO problems(slug,title,statement,time_limit_ms,memory_limit_mb,sql_schema,sql_fixture)
+                VALUES(?,?,?,?,?,?,?)""", (problem["slug"], problem["title"], problem["statement"], problem["time_limit_ms"], problem["memory_limit_mb"], problem.get("sql_schema"), problem.get("sql_fixture")))
             problem_id = connection.execute("SELECT id FROM problems WHERE slug=?", (problem["slug"],)).fetchone()["id"]
+            if problem.get("sql_schema"):
+                connection.execute("UPDATE problems SET sql_schema=? WHERE id=? AND sql_schema IS NULL", (problem["sql_schema"], problem_id))
             for language_name in problem["languages"]:
                 language_id = connection.execute("SELECT id FROM languages WHERE language_name=?", (language_name,)).fetchone()["id"]
                 connection.execute("INSERT OR IGNORE INTO problem_languages(problem_id,language_id) VALUES(?,?)", (problem_id, language_id))
             if not connection.execute("SELECT 1 FROM test_cases WHERE problem_id=? LIMIT 1", (problem_id,)).fetchone():
                 for test in problem["tests"]:
-                    connection.execute("INSERT INTO test_cases(problem_id,input,expected_output) VALUES(?,?,?)", (problem_id, test["input"], test["expected_output"]))
+                    connection.execute("INSERT INTO test_cases(problem_id,input,expected_output,sql_delta) VALUES(?,?,?,?)", (problem_id, test["input"], test["expected_output"], test.get("sql_delta", "")))
 
 
 def problem_payload(connection: sqlite3.Connection, slug: str, include_expected: bool, include_hidden_tests: bool = True) -> dict[str, Any] | None:
@@ -225,8 +239,11 @@ def problem_payload(connection: sqlite3.Connection, slug: str, include_expected:
     return {
         "slug": problem["slug"], "title": problem["title"], "statement": problem["statement"],
         "time_limit_ms": problem["time_limit_ms"], "memory_limit_mb": problem["memory_limit_mb"],
+        "execution_mode": "sql" if problem["sql_fixture"] is not None else "program",
+        **({"sql_schema": problem["sql_schema"]} if problem["sql_schema"] is not None else {}),
         "allowed_languages": [language["language_name"] for language in languages],
-        "tests": [{"id": test["id"], "input": test["input"], **({"expected_output": test["expected_output"]} if include_expected or not include_hidden_tests else {}), "is_sample": not include_hidden_tests} for test in tests],
+        **({"sql_fixture": problem["sql_fixture"]} if include_expected and problem["sql_fixture"] is not None else {}),
+        "tests": [{"id": test["id"], "input": test["input"], **({"expected_output": test["expected_output"], "sql_delta": test["sql_delta"]} if include_expected else ({"expected_output": test["expected_output"]} if not include_hidden_tests else {})), "is_sample": not include_hidden_tests} for test in tests],
     }
 
 

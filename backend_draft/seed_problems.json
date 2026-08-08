@@ -4,7 +4,8 @@
     {"language_name": "c", "docker_image": "gcc:14"},
     {"language_name": "cpp", "docker_image": "gcc:14"},
     {"language_name": "javascript", "docker_image": "node:22-alpine"},
-    {"language_name": "java", "docker_image": "eclipse-temurin:21-jdk-alpine"}
+    {"language_name": "java", "docker_image": "eclipse-temurin:21-jdk-alpine"},
+    {"language_name": "sql", "docker_image": "postgres:17-alpine"}
   ],
   "problems": [
     {
@@ -49,6 +50,21 @@
         {"input": "palindrome\n", "expected_output": "NO\n"},
         {"input": "12321\n", "expected_output": "YES\n"},
         {"input": "\n", "expected_output": "YES\n"}
+      ]
+    },
+    {
+      "slug": "engineering-roster",
+      "title": "Engineering Roster",
+      "statement": "The employees table has columns id, name, department, and salary. Write one SQL SELECT query that returns the names of employees in the Engineering department, ordered by name ascending. Return one column and do not include headers.",
+      "time_limit_ms": 1000,
+      "memory_limit_mb": 256,
+      "languages": ["sql"],
+      "sql_schema": "CREATE TABLE employees (\n  id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL,\n  department TEXT NOT NULL,\n  salary INTEGER NOT NULL\n);",
+      "sql_fixture": "CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, department TEXT NOT NULL, salary INTEGER NOT NULL);\nINSERT INTO employees (id, name, department, salary) VALUES (1, 'Amina', 'Engineering', 90000), (2, 'Boris', 'Sales', 70000), (3, 'Chen', 'Engineering', 105000), (4, 'Dia', 'Support', 65000);\n",
+      "tests": [
+        {"input": "Base dataset", "expected_output": "Amina\nChen\n", "sql_delta": ""},
+        {"input": "Add Elena to Engineering", "expected_output": "Amina\nChen\nElena\n", "sql_delta": "INSERT INTO employees (id, name, department, salary) VALUES (5, 'Elena', 'Engineering', 98000);"},
+        {"input": "Move Chen to Sales", "expected_output": "Amina\n", "sql_delta": "UPDATE employees SET department = 'Sales' WHERE id = 3;"}
       ]
     }
   ]

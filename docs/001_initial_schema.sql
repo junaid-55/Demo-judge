@@ -18,7 +18,9 @@ CREATE TABLE problems (
   title TEXT NOT NULL,
   statement TEXT NOT NULL,
   time_limit_ms INTEGER NOT NULL,
-  memory_limit_mb INTEGER NOT NULL
+  memory_limit_mb INTEGER NOT NULL,
+  sql_schema TEXT,
+  sql_fixture TEXT
 );
 
 CREATE TABLE problem_languages (
@@ -31,7 +33,8 @@ CREATE TABLE test_cases (
   id INTEGER PRIMARY KEY,
   problem_id INTEGER NOT NULL REFERENCES problems(id),
   input TEXT NOT NULL,
-  expected_output TEXT NOT NULL
+  expected_output TEXT NOT NULL,
+  sql_delta TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE submissions (
@@ -70,7 +73,8 @@ INSERT INTO languages (language_name, docker_image) VALUES
   ('c', 'gcc:14'),
   ('cpp', 'gcc:14'),
   ('javascript', 'node:22-alpine'),
-  ('java', 'eclipse-temurin:21-jdk-alpine');
+  ('java', 'eclipse-temurin:21-jdk-alpine'),
+  ('sql', 'postgres:17-alpine');
 
 INSERT INTO problems (slug, title, statement, time_limit_ms, memory_limit_mb) VALUES
   ('sum-two-integers', 'Sum of Two Integers',
@@ -90,5 +94,25 @@ INSERT INTO test_cases (problem_id, input, expected_output)
 SELECT id, '0 0' || char(10), '0' || char(10) FROM problems WHERE slug = 'sum-two-integers';
 INSERT INTO test_cases (problem_id, input, expected_output)
 SELECT id, '999999999 1' || char(10), '1000000000' || char(10) FROM problems WHERE slug = 'sum-two-integers';
+
+INSERT INTO problems (slug, title, statement, time_limit_ms, memory_limit_mb, sql_schema, sql_fixture) VALUES
+  ('engineering-roster', 'Engineering Roster',
+   'Write one SELECT query that returns the names of Engineering employees ordered by name.', 1000, 256,
+   'CREATE TABLE employees (' || char(10) || '  id INTEGER PRIMARY KEY,' || char(10) || '  name TEXT NOT NULL,' || char(10) || '  department TEXT NOT NULL,' || char(10) || '  salary INTEGER NOT NULL' || char(10) || ');',
+   'CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, department TEXT NOT NULL, salary INTEGER NOT NULL);' || char(10) ||
+   'INSERT INTO employees VALUES (1, ''Amina'', ''Engineering'', 90000), (2, ''Boris'', ''Sales'', 70000), (3, ''Chen'', ''Engineering'', 105000), (4, ''Dia'', ''Support'', 65000);' || char(10));
+
+INSERT INTO problem_languages (problem_id, language_id)
+SELECT p.id, l.id FROM problems p JOIN languages l ON l.language_name = 'sql'
+WHERE p.slug = 'engineering-roster';
+
+INSERT INTO test_cases (problem_id, input, expected_output, sql_delta)
+SELECT id, 'Base dataset', 'Amina' || char(10) || 'Chen' || char(10), '' FROM problems WHERE slug = 'engineering-roster';
+INSERT INTO test_cases (problem_id, input, expected_output, sql_delta)
+SELECT id, 'Add Elena to Engineering', 'Amina' || char(10) || 'Chen' || char(10) || 'Elena' || char(10),
+  'INSERT INTO employees VALUES (5, ''Elena'', ''Engineering'', 98000);' FROM problems WHERE slug = 'engineering-roster';
+INSERT INTO test_cases (problem_id, input, expected_output, sql_delta)
+SELECT id, 'Move Chen to Sales', 'Amina' || char(10),
+  'UPDATE employees SET department = ''Sales'' WHERE id = 3;' FROM problems WHERE slug = 'engineering-roster';
 
 COMMIT;

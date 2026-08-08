@@ -1,12 +1,13 @@
 const AGENT_URL = "http://127.0.0.1:37123";
 const BACKEND_URL = "http://127.0.0.1:38123";
-const LANGUAGE_LABELS = { python: "Python", c: "C", cpp: "C++", javascript: "JavaScript", java: "Java" };
+const LANGUAGE_LABELS = { python: "Python", c: "C", cpp: "C++", javascript: "JavaScript", java: "Java", sql: "SQL" };
 const STARTERS = {
   python: "import sys\n\n\ndef solve():\n    # Write your solution here.\n    pass\n\n\nif __name__ == '__main__':\n    solve()\n",
   c: "#include <stdio.h>\n\nint main(void) {\n    // Write your solution here.\n    return 0;\n}\n",
   cpp: "#include <iostream>\n\nint main() {\n    // Write your solution here.\n    return 0;\n}\n",
   javascript: "const fs = require('fs');\nconst input = fs.readFileSync(0, 'utf8');\n\n// Write your solution here.\n",
   java: "public class solution {\n    public static void main(String[] args) throws Exception {\n        // Write your solution here.\n    }\n}\n",
+  sql: "-- Write one SELECT query here.\n",
 };
 
 const state = { problems: [], selected: null, runId: null, result: null, failure: null, activeTestId: null, retryTimer: null, connecting: false, theme: localStorage.getItem("chakrikoi-theme") || "latte" };
@@ -59,13 +60,15 @@ function renderProblems() {
 
 function renderProblem(problem) {
   const samples = problem.tests.filter(test => test.is_sample).map((test, index) => `<article class="sample"><label>Sample ${index + 1} input</label><pre>${escapeHtml(test.input)}</pre><label>Expected output</label><pre>${escapeHtml(test.expected_output || "")}</pre></article>`).join("");
+  const schema = problem.sql_schema ? `<details class="schema-accordion"><summary>Schema</summary><pre>${escapeHtml(problem.sql_schema)}</pre></details>` : "";
   elements.content.className = "";
-  elements.content.innerHTML = `<p class="eyebrow">${escapeHtml(problem.slug)}</p><h2 id="problem-title">${escapeHtml(problem.title)}</h2><p>${escapeHtml(problem.statement)}</p><div class="limits"><span class="limit">${problem.time_limit_ms} ms</span><span class="limit">${problem.memory_limit_mb} MB</span></div><div class="samples"><h3>Examples</h3>${samples || "<p class=\"muted\">No public examples.</p>"}</div>`;
+  elements.content.innerHTML = `<p class="eyebrow">${escapeHtml(problem.slug)}</p><h2 id="problem-title">${escapeHtml(problem.title)}</h2><p>${escapeHtml(problem.statement)}</p><div class="limits"><span class="limit">${problem.time_limit_ms} ms</span><span class="limit">${problem.memory_limit_mb} MB</span></div>${schema}<div class="samples"><h3>Examples</h3>${samples || "<p class=\"muted\">No public examples.</p>"}</div>`;
 }
 
 async function selectProblem(slug) {
   try {
     const problem = await backendRequest(`/v1/problems/${encodeURIComponent(slug)}`);
+    if (state.selected?.execution_mode === "sql" && state.selected.slug !== problem.slug) releaseSqlSession(state.selected.slug);
     state.selected = problem; state.result = null; state.failure = null; state.runId = null; state.activeTestId = null;
     renderProblems(); renderProblem(problem); setSidebar(false); updateResultsButton();
     elements.editorProblem.textContent = problem.title;
@@ -73,6 +76,10 @@ async function selectProblem(slug) {
     elements.language.disabled = false; elements.source.disabled = false; elements.submit.disabled = false;
     elements.source.value = STARTERS[elements.language.value] || ""; updateLines();
   } catch (error) { renderFailure(error.message); }
+}
+
+async function releaseSqlSession(slug) {
+  try { await request(`/v1/sql-sessions/${encodeURIComponent(slug)}`, { method: "DELETE" }); } catch (_) { /* The agent may already be stopped. */ }
 }
 
 function renderFailure(message) {
@@ -182,6 +189,9 @@ elements.source.addEventListener("keydown", event => {
   if (event.key === "Tab") { event.preventDefault(); const { selectionStart, selectionEnd, value } = elements.source; elements.source.value = `${value.slice(0, selectionStart)}  ${value.slice(selectionEnd)}`; elements.source.selectionStart = elements.source.selectionEnd = selectionStart + 2; updateLines(); }
 });
 elements.language.addEventListener("change", () => { elements.source.value = STARTERS[elements.language.value] || ""; updateLines(); });
+window.addEventListener("pagehide", () => {
+  if (state.selected?.execution_mode === "sql") fetch(`${AGENT_URL}/v1/sql-sessions/${encodeURIComponent(state.selected.slug)}`, { method: "DELETE", keepalive: true }).catch(() => {});
+});
 applyTheme();
 loadProblems();
 connect();

@@ -45,6 +45,7 @@ class Service:
         self.user_id = bootstrap.get("demo_user_id", "local-demo-user")
         self.runs, self.lock, self.changed = {}, threading.Lock(), None
         self.changed = threading.Condition(self.lock)
+        self.sql_sessions, self.sql_lock = {}, threading.Lock()
 
     def accepts_origin(self, origin):
         return bool(origin) and any(fnmatch.fnmatchcase(origin, pattern) for pattern in self.origins)
@@ -83,13 +84,11 @@ class Service:
             self.set(run_id, "fetching_problem")
             problem_path = self.manifest["api_paths"]["problem"].replace("{slug}", slug)
             problem = request_json("GET", self.base + problem_path, headers={"Authorization": f"Bearer {grant}"})
-            if language not in problem["allowed_languages"] or language not in PROFILES:
+            if language not in problem["allowed_languages"] or (language != "sql" and language not in PROFILES):
                 raise ValueError("unsupported language")
             image = self.manifest["images"][language]
-            result = self.execute(
-                language, source, problem, image,
-                lambda detail: self.set(run_id, "preparing_runtime", detail),
-            )
+            progress = lambda detail: self.set(run_id, "preparing_runtime", detail)
+            result = self.execute_sql(source, problem, image, progress) if language == "sql" else self.execute(language, source, problem, image, progress)
             self.set(run_id, "running")
             completion_result = {
                 "overall_status": result["overall_status"],
@@ -123,6 +122,101 @@ class Service:
                 time.sleep(2)
         detail = errors[-1]
         raise RuntimeError(f"Could not download runtime image {image} after 2 attempts: {detail}")
+
+    def sql_command(self, container, database, source, user="judge", timeout=20):
+        return subprocess.run(
+            ["docker", "exec", "-i", "-e", f"PGPASSWORD={user}", "-e", "PGOPTIONS=-c statement_timeout=1000", container,
+             "psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "-U", user, "-d", database, "-A", "-t", "-F", "\t"],
+            input=source, text=True, capture_output=True, timeout=timeout,
+        )
+
+    def release_sql_session(self, slug):
+        with self.sql_lock:
+            session = self.sql_sessions.pop(slug, None)
+        if not session:
+            return
+        subprocess.run(["docker", "rm", "--force", session["container"]], capture_output=True)
+        subprocess.run(["docker", "volume", "rm", session["volume"]], capture_output=True)
+
+    def sql_session(self, problem, image, progress):
+        with self.sql_lock:
+            session = self.sql_sessions.get(problem["slug"])
+            if session:
+                return session
+            volume = f"chakrikoi-sql-{uuid.uuid4().hex}"
+            created = subprocess.run(["docker", "volume", "create", volume], text=True, capture_output=True)
+            if created.returncode:
+                raise RuntimeError(created.stderr or "could not create SQL runtime volume")
+            progress("Starting PostgreSQL runtime")
+            started = subprocess.run([
+                "docker", "run", "-d", "--rm", "--network", "none", "--memory", "256m",
+                "--security-opt", "no-new-privileges", "-e", "POSTGRES_USER=judge", "-e", "POSTGRES_PASSWORD=judge",
+                "-v", f"{volume}:/var/lib/postgresql/data", image,
+            ], text=True, capture_output=True)
+            if started.returncode:
+                subprocess.run(["docker", "volume", "rm", volume], capture_output=True)
+                raise RuntimeError(started.stderr or "could not start PostgreSQL runtime")
+            session = {"container": started.stdout.strip(), "volume": volume}
+            try:
+                for _ in range(120):
+                    ready = subprocess.run(["docker", "exec", session["container"], "pg_isready", "-U", "judge"], capture_output=True)
+                    if ready.returncode == 0:
+                        break
+                    time.sleep(0.5)
+                else:
+                    logs = subprocess.run(["docker", "logs", session["container"]], text=True, capture_output=True)
+                    detail = (logs.stderr or logs.stdout or "no container logs were available").strip()
+                    raise RuntimeError(f"PostgreSQL runtime did not become ready: {detail[-2000:]}")
+                created_base = self.sql_command(session["container"], "postgres", "CREATE DATABASE problem_base;")
+                if created_base.returncode:
+                    raise RuntimeError(created_base.stderr or created_base.stdout or "could not create SQL base database")
+                restored = self.sql_command(session["container"], "problem_base", problem["sql_fixture"])
+                if restored.returncode:
+                    raise RuntimeError(restored.stderr or "could not restore SQL fixture")
+                permissions = self.sql_command(session["container"], "problem_base", "CREATE ROLE solver LOGIN PASSWORD 'solver'; GRANT CONNECT ON DATABASE problem_base TO solver; GRANT USAGE ON SCHEMA public TO solver; GRANT SELECT ON ALL TABLES IN SCHEMA public TO solver;")
+                if permissions.returncode:
+                    raise RuntimeError(permissions.stderr or "could not configure SQL runner permissions")
+            except Exception:
+                subprocess.run(["docker", "rm", "--force", session["container"]], capture_output=True)
+                subprocess.run(["docker", "volume", "rm", volume], capture_output=True)
+                raise
+            self.sql_sessions[problem["slug"]] = session
+            return session
+
+    def execute_sql(self, source, problem, image, progress=lambda _detail: None):
+        if shutil.which("docker") is None:
+            raise RuntimeError("Docker is not available")
+        self.ensure_image(image, progress)
+        session = self.sql_session(problem, image, progress)
+        results = []
+        for test in problem["tests"]:
+            database = f"test_{uuid.uuid4().hex}"
+            started = time.monotonic()
+            output = error = ""
+            exit_code = None
+            try:
+                cloned = self.sql_command(session["container"], "postgres", f"CREATE DATABASE {database} TEMPLATE problem_base;")
+                if cloned.returncode:
+                    raise RuntimeError(cloned.stderr or "could not clone SQL test database")
+                if test.get("sql_delta"):
+                    delta = self.sql_command(session["container"], database, test["sql_delta"])
+                    if delta.returncode:
+                        raise RuntimeError(delta.stderr or "could not apply SQL test delta")
+                completed = self.sql_command(session["container"], database, source, user="solver", timeout=problem["time_limit_ms"] / 1000 + 3)
+                output, error, exit_code = completed.stdout, completed.stderr, completed.returncode
+                status = "passed" if completed.returncode == 0 and normalized(output) == normalized(test["expected_output"]) else "runtime_error" if completed.returncode else "failed"
+            except subprocess.TimeoutExpired as caught:
+                status, error = "time_limit_exceeded", str(caught)
+            except Exception as caught:
+                status, error = "runtime_error", str(caught)
+            finally:
+                self.sql_command(session["container"], "postgres", f"DROP DATABASE IF EXISTS {database};")
+            elapsed = round((time.monotonic() - started) * 1000)
+            results.append(self.result(test, status, elapsed, output, error, exit_code))
+        passed = sum(item["status"] == "passed" for item in results)
+        statuses = {item["status"] for item in results}
+        overall = "accepted" if passed == len(results) else "time_limit_exceeded" if "time_limit_exceeded" in statuses else "runtime_error" if "runtime_error" in statuses else "partial" if passed else "wrong_answer"
+        return {"overall_status": overall, "total_test_cases": len(results), "passed_test_cases": passed, "max_runtime_ms": max((item["runtime_ms"] for item in results), default=0), "test_results": results}
 
     def execute(self, language, source, problem, image, progress=lambda _detail: None):
         extension, compile_cmd, run_cmd = PROFILES[language]
@@ -203,6 +297,12 @@ def main():
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             if not all(isinstance(body.get(key), str) and body[key] for key in ("problem_slug", "language", "source_code")): return self.send_json(400, {"error": "missing run fields"})
             self.send_json(202, {"run_id": service.start(body), "status": "queued"})
+        def do_DELETE(self):
+            parsed = urlsplit(self.path)
+            if not service.accepts_origin(self.headers.get("Origin")) or not parsed.path.startswith("/v1/sql-sessions/"):
+                return self.send_json(403, {"error": "forbidden"})
+            service.release_sql_session(parsed.path.removeprefix("/v1/sql-sessions/"))
+            self.send_json(200, {"status": "released"})
         def do_GET(self):
             parsed = urlsplit(self.path)
             if parsed.path == "/v1/health":

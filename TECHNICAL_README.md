@@ -16,7 +16,7 @@
 
 ### GET /v1/runner/manifest
 
-Returns version, allowed_origins, api_paths, images, and expires_at. The runner uses it to determine permitted browser origins and the Docker image for each language.
+Returns version, allowed_origins, api_paths, images, and expires_at. The runner uses it to determine permitted browser origins and the Docker image for each language, including `sql -> postgres:17-alpine`.
 
 ### POST /v1/local-runs/grants
 
@@ -38,7 +38,7 @@ Public catalog endpoints used directly by the browser UI. They return statement,
 
 ### GET /v1/local-runs/problems/{slug}
 
-Requires an Authorization Bearer run grant. It returns slug, time_limit_ms, memory_limit_mb, allowed_languages, and all tests. `allowed_languages` is assembled from `problem_languages` and `languages`; the first two test rows by ID are marked as samples for the UI.
+Requires an Authorization Bearer run grant. It returns slug, time_limit_ms, memory_limit_mb, allowed_languages, and all tests. `allowed_languages` is assembled from `problem_languages` and `languages`; the first two test rows by ID are marked as samples for the UI. SQL problems additionally return the protected `sql_fixture` and per-test `sql_delta` fields.
 
 ### POST /v1/local-runs/complete
 
@@ -73,6 +73,8 @@ Long-polls local status. Intermediate states include `requesting_grant`, `fetchi
 | Service.start | Allocates a local run ID and starts a worker thread. |
 | Service.run | Requests a signed grant, fetches private test data, invokes Docker execution, and posts completion. |
 | Service.execute | Pulls the selected image, compiles once, executes all tests, and computes the verdict. |
+| Service.execute_sql | Reuses a PostgreSQL container and base fixture, clones one temporary database per SQL test, and executes the query as a read-only role. |
+| Service.release_sql_session | Stops the active SQL container and removes its temporary volume when the UI leaves that problem. |
 | Service.ensure_image | Pulls a missing Docker runtime automatically, retrying once before reporting Docker's error. |
 | Service.docker | Creates restricted Docker commands with no network, read-only root, dropped capabilities, temporary filesystem, and workspace mount. |
 | Service.status | Supports long-polling local status with wait=30. |

@@ -24,6 +24,8 @@ SQLite database          Docker runtime containers
 | Local agent | Docker image acquisition, sandboxed compilation/execution, result aggregation | Public problem catalog, database writes before a run is complete |
 | Docker | Compiler/runtime process isolation | Authentication, database access, network access |
 
+SQL problems use a separate PostgreSQL path inside the local agent. The `sql` language maps to the shared `postgres:17-alpine` image. A SQL problem stores its fixture in `problems.sql_fixture` and each test's change in `test_cases.sql_delta`; neither is returned by the public catalog API.
+
 ## Public Problem Flow
 
 The browser reads public metadata directly from the backend:
@@ -53,7 +55,7 @@ For the current local demo, the UI calls `http://127.0.0.1:38123`. In production
    Authorization: Bearer <run grant>
 
 4. Local agent -> Docker
-   Pulls a missing language image, compiles once, executes every test.
+   Pulls a missing language image, compiles once, executes every test. For SQL, it starts a reusable PostgreSQL container, restores the fixture to `problem_base`, clones that database for each test delta, runs the submitted query as the read-only `solver` role, then drops the clone.
 
 5. Local agent -> backend
    POST /v1/local-runs/complete
@@ -67,18 +69,20 @@ For the current local demo, the UI calls `http://127.0.0.1:38123`. In production
 
 The backend creates a submission only in step 5. A failed agent, unavailable Docker runtime, or interrupted run therefore cannot leave a pending submission row.
 
+The local agent retains an SQL PostgreSQL container and its temporary Docker volume while the user remains on that SQL problem. Switching away or closing the browser calls the local release endpoint; it stops the container and removes that volume. The PostgreSQL image remains cached by Docker.
+
 ## Trust Boundaries
 
 - The local agent binds only to `127.0.0.1`; it is not reachable from the network.
 - Browser origins are checked before the local agent accepts a submission request.
 - A short-lived HMAC-signed grant binds one user, problem, language, and exact source hash.
-- Docker runs have no network, a read-only root filesystem, dropped Linux capabilities, and an isolated temporary workspace.
+- Program containers have no network, a read-only root filesystem, dropped Linux capabilities, and an isolated temporary workspace. PostgreSQL has a writable temporary data volume for initialization, no network, and runs submitted SQL through a read-only database role.
 - The database rejects an exact repeat for the same user, problem, language, and `source_sha256`. A duplicate completion returns the existing submission ID without creating another row.
 
 The current diagnostic mode intentionally returns all executed test data to the local browser after a run. For a production judge that needs hidden tests to remain secret, return only public-test detail and aggregate verdicts for hidden tests.
 
 ## Database Migration
 
-[001_initial_schema.sql](001_initial_schema.sql) creates the SQLite schema and adds the `sum-two-integers` development problem with two sample tests and two hidden tests. `languages` holds the shared Docker image for each language, while `problem_languages` records which languages a problem permits. The backend manifest now reads images from `languages`.
+[001_initial_schema.sql](001_initial_schema.sql) creates the SQLite schema and adds the `sum-two-integers` development problem with two sample tests and two hidden tests, plus the `engineering-roster` SQL problem. `languages` holds the shared Docker image for each language, while `problem_languages` records which languages a problem permits. The backend manifest now reads images from `languages`.
 
 The demo rows use `python:3.13-alpine`, `node:22-alpine`, `gcc:14` for C/C++, and `eclipse-temurin:21-jdk-alpine` for Java compilation. The first two test rows by ID are samples, selected with `ORDER BY id LIMIT 2`. This is an initial migration for an empty database; the demo backend automatically converts its previous schema on startup, including the earlier grant-JTI submission format.

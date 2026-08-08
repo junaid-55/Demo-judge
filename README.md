@@ -7,7 +7,7 @@ This project lets a learner solve programming problems in their own editor while
 1. You write a solution in any editor.
 2. The local Chakri Koi Runner receives the solution.
 3. It asks the backend for a signed run permission, then fetches the problem rules and tests.
-4. It runs your solution in an isolated Docker container.
+4. It runs code in an isolated Docker container, or an SQL query in a temporary PostgreSQL database cloned from the problem fixture.
 5. It checks every test and reports what passed, failed, timed out, or could not compile.
 6. When the run finishes, the backend stores one complete submission record and all its test results together.
 
