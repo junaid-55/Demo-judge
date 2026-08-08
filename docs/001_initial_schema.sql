@@ -99,7 +99,6 @@ INSERT INTO problems (slug, title, statement, time_limit_ms, memory_limit_mb, sq
   ('engineering-roster', 'Engineering Roster',
    'Write one SELECT query that returns the names of Engineering employees ordered by name.', 1000, 256,
    'CREATE TABLE employees (' || char(10) || '  id INTEGER PRIMARY KEY,' || char(10) || '  name TEXT NOT NULL,' || char(10) || '  department TEXT NOT NULL,' || char(10) || '  salary INTEGER NOT NULL' || char(10) || ');',
-   'CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, department TEXT NOT NULL, salary INTEGER NOT NULL);' || char(10) ||
    'INSERT INTO employees VALUES (1, ''Amina'', ''Engineering'', 90000), (2, ''Boris'', ''Sales'', 70000), (3, ''Chen'', ''Engineering'', 105000), (4, ''Dia'', ''Support'', 65000);' || char(10));
 
 INSERT INTO problem_languages (problem_id, language_id)

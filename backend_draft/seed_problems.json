@@ -60,11 +60,11 @@
       "memory_limit_mb": 256,
       "languages": ["sql"],
       "sql_schema": "CREATE TABLE employees (\n  id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL,\n  department TEXT NOT NULL,\n  salary INTEGER NOT NULL\n);",
-      "sql_fixture": "CREATE TABLE employees (id INTEGER PRIMARY KEY, name TEXT NOT NULL, department TEXT NOT NULL, salary INTEGER NOT NULL);\nINSERT INTO employees (id, name, department, salary) VALUES (1, 'Amina', 'Engineering', 90000), (2, 'Boris', 'Sales', 70000), (3, 'Chen', 'Engineering', 105000), (4, 'Dia', 'Support', 65000);\n",
+      "sql_fixture": "INSERT INTO employees (id, name, department, salary) VALUES (1, 'Amina', 'Engineering', 90000), (2, 'Boris', 'Sales', 70000), (3, 'Chen', 'Engineering', 105000), (4, 'Dia', 'Support', 65000);\n",
       "tests": [
-        {"input": "Base dataset", "expected_output": "Amina\nChen\n", "sql_delta": ""},
-        {"input": "Add Elena to Engineering", "expected_output": "Amina\nChen\nElena\n", "sql_delta": "INSERT INTO employees (id, name, department, salary) VALUES (5, 'Elena', 'Engineering', 98000);"},
-        {"input": "Move Chen to Sales", "expected_output": "Amina\n", "sql_delta": "UPDATE employees SET department = 'Sales' WHERE id = 3;"}
+        {"input": "Use the base employees dataset: Amina and Chen are in Engineering; Boris is in Sales; Dia is in Support.", "expected_output": "Amina\nChen\n", "sql_delta": ""},
+        {"input": "Use the base dataset. Before your query runs, Elena (id 5, salary 98000) is added to the Engineering department.", "expected_output": "Amina\nChen\nElena\n", "sql_delta": "INSERT INTO employees (id, name, department, salary) VALUES (5, 'Elena', 'Engineering', 98000);"},
+        {"input": "Use the base dataset. Before your query runs, Chen's department is changed from Engineering to Sales.", "expected_output": "Amina\n", "sql_delta": "UPDATE employees SET department = 'Sales' WHERE id = 3;"}
       ]
     }
   ]

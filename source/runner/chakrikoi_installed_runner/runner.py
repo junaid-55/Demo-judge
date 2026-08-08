@@ -195,7 +195,8 @@ class Service:
                 created_base = self.sql_command(session["container"], "postgres", "CREATE DATABASE problem_base;")
                 if created_base.returncode:
                     raise RuntimeError(created_base.stderr or created_base.stdout or "could not create SQL base database")
-                restored = self.sql_command(session["container"], "problem_base", problem["sql_fixture"])
+                fixture = f"{problem.get('sql_schema', '')}\n{problem['sql_fixture']}"
+                restored = self.sql_command(session["container"], "problem_base", fixture)
                 if restored.returncode:
                     raise RuntimeError(restored.stderr or "could not restore SQL fixture")
                 permissions = self.sql_command(session["container"], "problem_base", "CREATE ROLE solver LOGIN PASSWORD 'solver'; GRANT CONNECT ON DATABASE problem_base TO solver; GRANT USAGE ON SCHEMA public TO solver; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO solver; GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO solver;")

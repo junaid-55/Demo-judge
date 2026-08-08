@@ -60,7 +60,9 @@ function renderProblems() {
 }
 
 function renderProblem(problem) {
-  const samples = problem.tests.filter(test => test.is_sample).map((test, index) => `<article class="sample"><label>Sample ${index + 1} input</label><pre>${escapeHtml(test.input)}</pre><label>Expected output</label><pre>${escapeHtml(test.expected_output || "")}</pre></article>`).join("");
+  const samples = problem.execution_mode === "sql"
+    ? problem.tests.map((test, index) => `<article class="sample"><label>Query ${index + 1} scenario</label><pre>${escapeHtml(test.input)}</pre></article>`).join("")
+    : problem.tests.filter(test => test.is_sample).map((test, index) => `<article class="sample"><label>Sample ${index + 1} input</label><pre>${escapeHtml(test.input)}</pre><label>Expected output</label><pre>${escapeHtml(test.expected_output || "")}</pre></article>`).join("");
   const schema = problem.sql_schema ? `<details class="schema-accordion"><summary>Schema</summary><pre>${escapeHtml(problem.sql_schema)}</pre></details>` : "";
   elements.content.className = "";
   elements.content.innerHTML = `<p class="eyebrow">${escapeHtml(problem.slug)}</p><h2 id="problem-title">${escapeHtml(problem.title)}</h2><p>${escapeHtml(problem.statement)}</p><div class="limits"><span class="limit">${problem.time_limit_ms} ms</span><span class="limit">${problem.memory_limit_mb} MB</span></div>${schema}<div class="samples"><h3>Examples</h3>${samples || "<p class=\"muted\">No public examples.</p>"}</div>`;

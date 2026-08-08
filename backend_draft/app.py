@@ -220,12 +220,20 @@ def init_database() -> None:
             problem_id = connection.execute("SELECT id FROM problems WHERE slug=?", (problem["slug"],)).fetchone()["id"]
             if problem.get("sql_schema"):
                 connection.execute("UPDATE problems SET sql_schema=? WHERE id=? AND sql_schema IS NULL", (problem["sql_schema"], problem_id))
+            if problem.get("sql_fixture"):
+                connection.execute("""UPDATE problems SET sql_fixture=? WHERE id=?
+                    AND sql_fixture LIKE 'CREATE TABLE%'""", (problem["sql_fixture"], problem_id))
             for language_name in problem["languages"]:
                 language_id = connection.execute("SELECT id FROM languages WHERE language_name=?", (language_name,)).fetchone()["id"]
                 connection.execute("INSERT OR IGNORE INTO problem_languages(problem_id,language_id) VALUES(?,?)", (problem_id, language_id))
             if not connection.execute("SELECT 1 FROM test_cases WHERE problem_id=? LIMIT 1", (problem_id,)).fetchone():
                 for test in problem["tests"]:
                     connection.execute("INSERT INTO test_cases(problem_id,input,expected_output,sql_delta) VALUES(?,?,?,?)", (problem_id, test["input"], test["expected_output"], test.get("sql_delta", "")))
+            elif problem.get("sql_schema"):
+                existing_tests = connection.execute("SELECT id FROM test_cases WHERE problem_id=? ORDER BY id", (problem_id,)).fetchall()
+                if len(existing_tests) == len(problem["tests"]):
+                    for existing, test in zip(existing_tests, problem["tests"]):
+                        connection.execute("UPDATE test_cases SET input=? WHERE id=?", (test["input"], existing["id"]))
 
 
 def problem_payload(connection: sqlite3.Connection, slug: str, include_expected: bool, include_hidden_tests: bool = True) -> dict[str, Any] | None:
@@ -235,16 +243,17 @@ def problem_payload(connection: sqlite3.Connection, slug: str, include_expected:
     languages = connection.execute("""SELECT l.language_name FROM languages l JOIN problem_languages pl ON pl.language_id=l.id
         WHERE pl.problem_id=? ORDER BY l.id""", (problem["id"],)).fetchall()
     all_tests = connection.execute("SELECT * FROM test_cases WHERE problem_id=? ORDER BY id", (problem["id"],)).fetchall()
-    tests = all_tests if include_hidden_tests else all_tests[:2]
+    is_sql = problem["sql_fixture"] is not None
+    tests = all_tests if include_hidden_tests or is_sql else all_tests[:2]
     return {
         "slug": problem["slug"], "title": problem["title"], "statement": problem["statement"],
         "time_limit_ms": problem["time_limit_ms"], "memory_limit_mb": problem["memory_limit_mb"],
-        "execution_mode": "sql" if problem["sql_fixture"] is not None else "program",
+        "execution_mode": "sql" if is_sql else "program",
         **({"sql_schema": problem["sql_schema"]} if problem["sql_schema"] is not None else {}),
-        **({"sql_tasks": [{"id": test["id"], "label": f"Query {index + 1}"} for index, test in enumerate(all_tests)]} if problem["sql_fixture"] is not None and not include_expected else {}),
+        **({"sql_tasks": [{"id": test["id"], "label": f"Query {index + 1}"} for index, test in enumerate(all_tests)]} if is_sql and not include_expected else {}),
         "allowed_languages": [language["language_name"] for language in languages],
-        **({"sql_fixture": problem["sql_fixture"]} if include_expected and problem["sql_fixture"] is not None else {}),
-        "tests": [{"id": test["id"], "input": test["input"], **({"expected_output": test["expected_output"], "sql_delta": test["sql_delta"]} if include_expected else ({"expected_output": test["expected_output"]} if not include_hidden_tests else {})), "is_sample": not include_hidden_tests} for test in tests],
+        **({"sql_fixture": problem["sql_fixture"]} if include_expected and is_sql else {}),
+        "tests": [{"id": test["id"], "input": test["input"], **({"expected_output": test["expected_output"], "sql_delta": test["sql_delta"]} if include_expected else ({"expected_output": test["expected_output"]} if not include_hidden_tests and not is_sql else {})), "is_sample": not include_hidden_tests} for test in tests],
     }
 
 

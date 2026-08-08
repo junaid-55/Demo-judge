@@ -24,9 +24,9 @@ SQLite database          Docker runtime containers
 | Local agent | Docker image acquisition, sandboxed compilation/execution, result aggregation | Public problem catalog, database writes before a run is complete |
 | Docker | Compiler/runtime process isolation | Authentication, database access, network access |
 
-SQL problems use a separate PostgreSQL path inside the local agent. The `sql` language maps to the shared `postgres:17-alpine` image. A SQL problem stores its fixture in `problems.sql_fixture` and each test's change in `test_cases.sql_delta`; neither is returned by the public catalog API.
+SQL problems use a separate PostgreSQL path inside the local agent. The `sql` language maps to the shared `postgres:17-alpine` image. A SQL problem stores public DDL in `problems.sql_schema`, base rows/setup in protected `problems.sql_fixture`, and each test's change in `test_cases.sql_delta`. The runner concatenates schema and fixture only inside the local PostgreSQL runtime.
 
-For SQL puzzle problems, the public catalog returns only `sql_schema` and ordered `sql_tasks` IDs. Each task maps to one protected test delta. A notebook-cell run is local only: it creates no submission row and cannot change the user's persisted submission history.
+For SQL puzzle problems, the public catalog returns `sql_schema`, ordered `sql_tasks` IDs, and a scenario description for every task. Each task maps to one protected test delta and expected result. A notebook-cell run is local only: it creates no submission row and cannot change the user's persisted submission history.
 
 ## Public Problem Flow
 

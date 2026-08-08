@@ -41,7 +41,7 @@ Each test case requires:
 | input | Exact stdin string, including newlines. |
 | expected_output | Exact expected stdout string. |
 
-For an SQL problem, set `languages` to `["sql"]`, add `sql_fixture` containing the base PostgreSQL schema and data, and give each test an optional `sql_delta`. The runner restores the fixture once into `problem_base`, clones that database per test, applies the delta, and compares the submitted query's tab-separated output. SQL source should be one read-only query.
+For an SQL problem, set `languages` to `["sql"]`, add public `sql_schema` with the table definitions, add protected `sql_fixture` with base rows/setup only, and give each test an optional `sql_delta`. The runner restores `sql_schema + sql_fixture` once into `problem_base`, clones that database per test, applies the delta, and compares the submitted query's tab-separated output.
 
 The first two inserted tests are shown as samples through `ORDER BY id LIMIT 2`; later rows are run-only tests. This order is the order in `tests` within the seed file. Use a new slug whenever changing test data. Seed data is idempotent: the backend adds a problem only when its slug is not already in SQLite. It intentionally does not overwrite existing tests or alter recorded submissions.
 
