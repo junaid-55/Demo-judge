@@ -253,7 +253,7 @@ def problem_payload(connection: sqlite3.Connection, slug: str, include_expected:
         **({"sql_tasks": [{"id": test["id"], "label": f"Query {index + 1}"} for index, test in enumerate(all_tests)]} if is_sql and not include_expected else {}),
         "allowed_languages": [language["language_name"] for language in languages],
         **({"sql_fixture": problem["sql_fixture"]} if include_expected and is_sql else {}),
-        "tests": [{"id": test["id"], "input": test["input"], **({"expected_output": test["expected_output"], "sql_delta": test["sql_delta"]} if include_expected else ({"expected_output": test["expected_output"]} if not include_hidden_tests and not is_sql else {})), "is_sample": not include_hidden_tests} for test in tests],
+        "tests": [{"id": test["id"], "input": test["input"], **({"expected_output": test["expected_output"], "sql_delta": test["sql_delta"]} if include_expected else ({"expected_output": test["expected_output"]} if not include_hidden_tests else {})), "is_sample": not include_hidden_tests} for test in tests],
     }
 
 

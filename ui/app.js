@@ -61,7 +61,7 @@ function renderProblems() {
 
 function renderProblem(problem) {
   const samples = problem.execution_mode === "sql"
-    ? `<div class="sql-scenarios">${problem.tests.map((test, index) => `<p><strong>Query ${index + 1}.</strong> ${escapeHtml(test.input)}</p>`).join("")}</div>`
+    ? `<div class="sql-scenarios">${problem.tests.map((test, index) => `<article class="sql-scenario-card"><div><label>Query ${index + 1} scenario</label><p>${escapeHtml(test.input)}</p></div><div><label>Expected output</label><pre>${escapeHtml(test.expected_output || "(empty output)")}</pre></div></article>`).join("")}</div>`
     : problem.tests.filter(test => test.is_sample).map((test, index) => `<article class="sample"><label>Sample ${index + 1} input</label><pre>${escapeHtml(test.input)}</pre><label>Expected output</label><pre>${escapeHtml(test.expected_output || "")}</pre></article>`).join("");
   const schema = problem.sql_schema ? `<details class="schema-accordion"><summary>Schema</summary><pre>${escapeHtml(problem.sql_schema)}</pre></details>` : "";
   elements.content.className = "";

@@ -85,8 +85,9 @@ button:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opaci
 .samples { max-width: 600px; margin-top: 32px; }
 .samples h3 { margin: 0 0 10px; font-size: 14px; }
 .sql-scenarios { display: grid; gap: 10px; }
-.sql-scenarios p { margin: 0; color: var(--subtext); font-size: 13px; line-height: 1.55; }
-.sql-scenarios strong { color: var(--text); font-weight: 760; }
+.sql-scenario-card { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(120px, .7fr); overflow: hidden; border: 1px solid var(--surface-1); border-radius: 5px; background: var(--mantle); }
+.sql-scenario-card > div { min-width: 0; padding: 10px; }.sql-scenario-card > div + div { border-left: 1px solid var(--surface-1); background: var(--base); }
+.sql-scenario-card label { display: block; margin-bottom: 6px; color: var(--subtext); font-size: 10px; font-weight: 800; text-transform: uppercase; }.sql-scenario-card p { margin: 0; color: var(--subtext); font-size: 13px; line-height: 1.55; }.sql-scenario-card pre { margin: 0; overflow-x: auto; color: var(--text); font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
 .sample { margin: 0 0 12px; overflow: hidden; border: 1px solid var(--surface-1); border-radius: 5px; background: var(--mantle); }
 .sample label { display: block; padding: 7px 10px; color: var(--subtext); border-bottom: 1px solid var(--surface-1); font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .sample pre { margin: 0; padding: 10px; overflow-x: auto; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }

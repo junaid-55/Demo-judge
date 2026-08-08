@@ -34,7 +34,7 @@ The browser never calls this API. `Service.run` obtains the grant after the brow
 
 ### GET /v1/problems and GET /v1/problems/{slug}
 
-Public catalog endpoints used directly by the browser UI. They return statement, limits, language list, and sample tests only. Hidden test input and expected output stay behind the grant-required runner endpoint. These endpoints add CORS only for origins allowed by the backend configuration.
+Public catalog endpoints used directly by the browser UI. They return statement, limits, language list, and sample tests only. SQL puzzle scenarios intentionally expose every scenario description and expected output; their executable test deltas remain behind the grant-required runner endpoint. These endpoints add CORS only for origins allowed by the backend configuration.
 
 ### GET /v1/local-runs/problems/{slug}
 
@@ -62,7 +62,7 @@ The response is `202` with `run_id` and `status: queued`.
 
 ### POST /v1/sql-cells
 
-Browser request fields are `problem_slug`, `test_case_id`, and `source_code`. The runner obtains a normal short-lived SQL grant and protected problem data, then executes only the selected SQL test against a clone of `problem_base`. The solver may read and change tables in that clone; it cannot change `problem_base`, and the clone is dropped after the cell. It returns a normal local `run_id` for polling but deliberately does not call `/v1/local-runs/complete`; no submission is created. Its completed local result contains only pass/fail status, query output, stderr, runtime, and exit code, not the expected output or test delta.
+Browser request fields are `problem_slug`, `test_case_id`, and `source_code`. The runner obtains a normal short-lived SQL grant and protected problem data, then executes only the selected SQL test against a clone of `problem_base`. The solver may read and change tables in that clone; it cannot change `problem_base`, and the clone is dropped after the cell. It returns a normal local `run_id` for polling but deliberately does not call `/v1/local-runs/complete`; no submission is created. Its completed local result contains pass/fail status, query output, stderr, runtime, and exit code. The expected output is already shown by the public SQL scenario card; the test delta remains private.
 
 ### GET /v1/runs/{run_id}?wait=25
 

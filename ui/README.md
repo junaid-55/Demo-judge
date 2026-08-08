@@ -15,7 +15,7 @@ For a local preview, serve this directory through any static file server. Do not
 3. Start the generated local agent: `cd ../user_agent && ./chakrikoi-runner --bootstrap bootstrap.json`.
 4. Open the deployed Netlify page and press **Connect**. The default agent address is `http://127.0.0.1:37123`.
 
-The browser reads the public problem catalog directly from the backend and sends source only to the loopback agent. The agent obtains the signed grant, fetches private test data, starts Docker, and sends the one final completion request to the backend. Source code and private expected output are not sent from Netlify to the backend directly. SQL problems use a reusable local PostgreSQL container that is released when the user leaves the problem.
+The browser reads the public problem catalog directly from the backend and sends source only to the loopback agent. The agent obtains the signed grant, fetches private test data, starts Docker, and sends the one final completion request to the backend. Source code and private expected output are not sent from Netlify to the backend directly. SQL problem cards intentionally show expected output for each public scenario, but their executable test deltas remain private. SQL problems use a reusable local PostgreSQL container that is released when the user leaves the problem.
 
 SQL problems render as a notebook: one Run button per protected test scenario. Each cell is evaluated locally without creating a submission. The progress label becomes Incomplete, Partially complete, or Complete based on the cells that pass in the active browser session.
 
