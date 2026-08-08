@@ -28,7 +28,7 @@ Request fields:
 | language | Submitted language. |
 | source_sha256 | SHA-256 hash of the exact source text. |
 
-The current draft uses the X-Demo-User-Id header as an authentication adapter. It returns run_grant, an HMAC-signed token containing user, problem, language, source hash, expiry, audience, and jti.
+The current draft uses the X-Demo-User-Id header as an authentication adapter. It returns run_grant, an HMAC-signed token containing user, problem, language, source hash, expiry, and audience. Before granting a run, the backend returns `409 Conflict` when that user has already submitted the exact source hash for that problem and language.
 
 The browser never calls this API. `Service.run` obtains the grant after the browser has delegated a submission to the loopback runner.
 
@@ -38,13 +38,13 @@ Public catalog endpoints used directly by the browser UI. They return statement,
 
 ### GET /v1/local-runs/problems/{slug}
 
-Requires an Authorization Bearer run grant. It returns slug, time_limit_ms, memory_limit_mb, allowed_languages, and all public tests. Each test contains id, input, expected_output, and is_sample.
+Requires an Authorization Bearer run grant. It returns slug, time_limit_ms, memory_limit_mb, allowed_languages, and all tests. `allowed_languages` is assembled from `problem_languages` and `languages`; the first two test rows by ID are marked as samples for the UI.
 
 ### POST /v1/local-runs/complete
 
-Requires the same bearer grant. The runner sends problem_slug, language, source_code, docker_image, client_version, overall_status, total_test_cases, passed_test_cases, max_runtime_ms, and test_results.
+Requires the same bearer grant. The runner sends problem_slug, language, source_code, client_version, overall_status, max_runtime_ms, and test_results.
 
-Each test_results item has test_case_id, status, runtime_ms, actual_output, and error_output. The backend verifies the grant and source hash, then inserts submissions and submission_test_results in one SQLite transaction. The grant jti is unique, so retrying a lost completion response does not insert a duplicate.
+Each test_results item has test_case_id, status, runtime_ms, actual_output, and error_output. The backend verifies the grant and source hash, resolves `language_id`, then inserts `submissions` and boolean `test_results.passed` rows in one SQLite transaction. Test counts are computed from `test_results`; Docker image configuration belongs to `languages`. A unique `(user_id, problem_id, language_id, source_sha256)` constraint rejects an exact repeat and returns the existing submission ID.
 
 ## Loopback Agent API
 

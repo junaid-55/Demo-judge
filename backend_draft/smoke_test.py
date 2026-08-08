@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 BASE_URL = "http://127.0.0.1:38123"
-SOURCE = "#include <iostream>\nint main() { long long a, b; std::cin >> a >> b; std::cout << a + b << '\\n'; }\n"
+SOURCE = f"// smoke {time.time_ns()}\n#include <iostream>\nint main() {{ long long a, b; std::cin >> a >> b; std::cout << a + b << '\\n'; }}\n"
+USER = f"smoke-test-user-{time.time_ns()}"
 
 
 def call(method: str, path: str, body: dict | None = None, headers: dict | None = None) -> dict:
@@ -26,17 +29,14 @@ grant = call("POST", "/v1/local-runs/grants", {
     "problem_slug": "sum-two-integers",
     "language": "cpp",
     "source_sha256": hashlib.sha256(SOURCE.encode()).hexdigest(),
-}, {"X-Demo-User-Id": "smoke-test-user"})["run_grant"]
+}, {"X-Demo-User-Id": USER})["run_grant"]
 problem = call("GET", "/v1/local-runs/problems/sum-two-integers", headers={"Authorization": f"Bearer {grant}"})
 completion = call("POST", "/v1/local-runs/complete", {
     "problem_slug": problem["slug"],
     "language": "cpp",
     "source_code": SOURCE,
-    "docker_image": "gcc:14",
     "client_version": "smoke-test",
     "overall_status": "accepted",
-    "total_test_cases": len(problem["tests"]),
-    "passed_test_cases": len(problem["tests"]),
     "max_runtime_ms": 1,
     "test_results": [{
         "test_case_id": test["id"], "status": "passed", "runtime_ms": 1,
@@ -44,9 +44,21 @@ completion = call("POST", "/v1/local-runs/complete", {
     } for test in problem["tests"]],
 }, {"Authorization": f"Bearer {grant}"})
 
+try:
+    call("POST", "/v1/local-runs/grants", {
+        "problem_slug": "sum-two-integers",
+        "language": "cpp",
+        "source_sha256": hashlib.sha256(SOURCE.encode()).hexdigest(),
+    }, {"X-Demo-User-Id": USER})
+except HTTPError as error:
+    duplicate_status = error.code
+else:
+    duplicate_status = None
+
 print(json.dumps({
     "manifest_version": manifest["version"],
     "test_count": len(problem["tests"]),
     "submission_id": completion["submission_id"],
-    "idempotent": completion["idempotent"],
+    "duplicate": completion["duplicate"],
+    "duplicate_request_status": duplicate_status,
 }, indent=2))

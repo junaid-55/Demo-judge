@@ -20,7 +20,7 @@ The backend uses port 38123. The local runner uses port 37123. Stop another proc
 
 ## Add a Problem
 
-Edit backend_draft/seed_problems.json and add a new object to the top-level JSON array.
+Edit `backend_draft/seed_problems.json` and add a new object to its top-level `problems` array. Add a language to the top-level `languages` array only when its runtime image is not already configured.
 
 Required problem fields:
 
@@ -31,19 +31,17 @@ Required problem fields:
 | statement | Plain-text problem instructions. |
 | time_limit_ms | Time limit for each test. |
 | memory_limit_mb | Docker memory limit. |
-| allowed_languages | Array of supported language IDs. |
+| languages | Array of supported language names; each must exist in the top-level `languages` seed array. |
 | tests | Array of public test cases. |
 
 Each test case requires:
 
 | Field | Meaning |
 | --- | --- |
-| display_order | Visible test ordering. |
 | input | Exact stdin string, including newlines. |
 | expected_output | Exact expected stdout string. |
-| is_sample | True for an example shown to learners; false for a run-only public test. |
 
-Use a new slug whenever changing test data. Seed data is idempotent: the backend adds a problem only when its slug is not already in SQLite. It intentionally does not overwrite existing tests or alter recorded submissions.
+The first two inserted tests are shown as samples through `ORDER BY id LIMIT 2`; later rows are run-only tests. This order is the order in `tests` within the seed file. Use a new slug whenever changing test data. Seed data is idempotent: the backend adds a problem only when its slug is not already in SQLite. It intentionally does not overwrite existing tests or alter recorded submissions.
 
 After editing seed data, rebuild and start the backend:
 

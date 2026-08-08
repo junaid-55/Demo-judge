@@ -46,7 +46,7 @@ For the current local demo, the UI calls `http://127.0.0.1:38123`. In production
 
 2. Local agent -> backend
    POST /v1/local-runs/grants
-   The agent supplies a source hash and its authenticated user identity.
+   The agent supplies a source hash and its authenticated user identity. The backend declines an exact prior submission before Docker work starts.
 
 3. Local agent -> backend
    GET /v1/local-runs/problems/{slug}
@@ -73,12 +73,12 @@ The backend creates a submission only in step 5. A failed agent, unavailable Doc
 - Browser origins are checked before the local agent accepts a submission request.
 - A short-lived HMAC-signed grant binds one user, problem, language, and exact source hash.
 - Docker runs have no network, a read-only root filesystem, dropped Linux capabilities, and an isolated temporary workspace.
-- Submission completion is idempotent through the unique grant `jti` stored in `submissions.grant_jti`.
+- The database rejects an exact repeat for the same user, problem, language, and `source_sha256`. A duplicate completion returns the existing submission ID without creating another row.
 
 The current diagnostic mode intentionally returns all executed test data to the local browser after a run. For a production judge that needs hidden tests to remain secret, return only public-test detail and aggregate verdicts for hidden tests.
 
 ## Database Migration
 
-[001_initial_schema.sql](001_initial_schema.sql) creates the SQLite schema and adds the `sum-two-integers` development problem with two sample tests and two hidden tests. It also creates `runtime_images`, which holds the shared Docker image for each supported language. The current draft runner still reads its image mapping from the backend manifest; this table is the migration-ready source for moving that mapping into the database.
+[001_initial_schema.sql](001_initial_schema.sql) creates the SQLite schema and adds the `sum-two-integers` development problem with two sample tests and two hidden tests. `languages` holds the shared Docker image for each language, while `problem_languages` records which languages a problem permits. The backend manifest now reads images from `languages`.
 
-The demo rows use `python:3.13-alpine`, `node:22-alpine`, `gcc:14` for C/C++, and `eclipse-temurin:21-jdk-alpine` for Java compilation. It is safe to run the migration again because its seed inserts and indexes are idempotent.
+The demo rows use `python:3.13-alpine`, `node:22-alpine`, `gcc:14` for C/C++, and `eclipse-temurin:21-jdk-alpine` for Java compilation. The first two test rows by ID are samples, selected with `ORDER BY id LIMIT 2`. This is an initial migration for an empty database; the demo backend automatically converts its previous schema on startup, including the earlier grant-JTI submission format.

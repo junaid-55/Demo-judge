@@ -6,6 +6,7 @@ import argparse, fnmatch, hashlib, json, os, shutil, subprocess, tempfile, threa
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request, urlopen
 
@@ -21,8 +22,15 @@ PROFILES = {
 def request_json(method, url, body=None, headers=None):
     request = Request(url, data=json.dumps(body).encode() if body else None,
                       headers={"Content-Type": "application/json", **(headers or {})}, method=method)
-    with urlopen(request, timeout=30) as response:
-        return json.loads(response.read().decode()) if response.length != 0 else {}
+    try:
+        with urlopen(request, timeout=30) as response:
+            return json.loads(response.read().decode()) if response.length != 0 else {}
+    except HTTPError as error:
+        try:
+            detail = json.loads(error.read().decode()).get("error")
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            detail = None
+        raise RuntimeError(detail or f"backend request failed with HTTP {error.code}") from error
 
 
 def normalized(value):
@@ -84,7 +92,8 @@ class Service:
             )
             self.set(run_id, "running")
             completion_result = {
-                **result,
+                "overall_status": result["overall_status"],
+                "max_runtime_ms": result["max_runtime_ms"],
                 "test_results": [
                     {field: item[field] for field in ("test_case_id", "status", "runtime_ms", "actual_output", "error_output")}
                     for item in result["test_results"]
@@ -92,7 +101,7 @@ class Service:
             }
             payload = {
                 "problem_slug": slug, "language": language, "source_code": source,
-                "docker_image": image, "client_version": "installed-draft-0.1",
+                "client_version": "installed-draft-0.1",
                 **completion_result,
             }
             request_json("POST", self.base + "/v1/local-runs/complete", payload, {"Authorization": f"Bearer {grant}"})
