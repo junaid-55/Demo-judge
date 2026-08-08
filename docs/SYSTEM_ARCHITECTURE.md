@@ -26,6 +26,8 @@ SQLite database          Docker runtime containers
 
 SQL problems use a separate PostgreSQL path inside the local agent. The `sql` language maps to the shared `postgres:17-alpine` image. A SQL problem stores its fixture in `problems.sql_fixture` and each test's change in `test_cases.sql_delta`; neither is returned by the public catalog API.
 
+For SQL puzzle problems, the public catalog returns only `sql_schema` and ordered `sql_tasks` IDs. Each task maps to one protected test delta. A notebook-cell run is local only: it creates no submission row and cannot change the user's persisted submission history.
+
 ## Public Problem Flow
 
 The browser reads public metadata directly from the backend:
@@ -70,6 +72,8 @@ For the current local demo, the UI calls `http://127.0.0.1:38123`. In production
 The backend creates a submission only in step 5. A failed agent, unavailable Docker runtime, or interrupted run therefore cannot leave a pending submission row.
 
 The local agent retains an SQL PostgreSQL container and its temporary Docker volume while the user remains on that SQL problem. Switching away or closing the browser calls the local release endpoint; it stops the container and removes that volume. The PostgreSQL image remains cached by Docker.
+
+The SQL notebook tracks passed cells in the browser session. Zero passed cells is `Incomplete`; some passed cells is `Partially complete`; every cell passed is `Complete`.
 
 ## Trust Boundaries
 

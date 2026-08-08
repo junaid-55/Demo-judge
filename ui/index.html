@@ -40,6 +40,7 @@
       <section class="editor-panel" aria-label="Submission editor">
         <div class="editor-toolbar">
           <span id="editor-problem" class="editor-problem">No problem selected</span>
+          <span id="sql-progress" class="sql-progress" hidden></span>
           <select id="language" aria-label="Programming language" disabled></select>
           <button id="results-button" class="results-button neutral" type="button" title="Results" aria-label="Open results" disabled>Results</button>
           <button id="submit-button" class="submit" type="button" disabled>Submit</button>
@@ -47,6 +48,7 @@
         <div class="editor-shell">
           <div id="line-numbers" class="line-numbers" aria-hidden="true">1</div>
           <textarea id="source-code" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Source code" disabled placeholder="Choose a problem to start coding."></textarea>
+          <div id="sql-notebook" class="sql-notebook" hidden></div>
         </div>
       </section>
     </main>

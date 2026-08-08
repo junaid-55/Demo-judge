@@ -87,6 +87,7 @@ button:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opaci
 .editor-panel { display: grid; grid-template-rows: auto minmax(420px, 1fr); min-width: 0; }
 .editor-toolbar { display: flex; align-items: center; gap: 10px; min-height: 68px; padding: 12px 18px; border-bottom: 1px solid var(--surface-1); background: var(--mantle); }
 .editor-problem { overflow: hidden; margin-right: auto; font-size: 14px; font-weight: 760; text-overflow: ellipsis; white-space: nowrap; }
+.sql-progress { padding: 6px 8px; color: var(--subtext); border: 1px solid var(--surface-1); border-radius: 4px; background: var(--base); font-size: 12px; font-weight: 760; white-space: nowrap; }
 select { min-width: 120px; padding: 8px 28px 8px 9px; color: var(--text); border: 1px solid var(--surface-1); border-radius: 4px; background: var(--base); font-size: 13px; }
 .submit, .results-button { padding: 9px 13px; border: 1px solid transparent; border-radius: 4px; font-size: 13px; font-weight: 780; }
 .submit { color: var(--base); background: var(--accent); }
@@ -97,6 +98,15 @@ select { min-width: 120px; padding: 8px 28px 8px 9px; color: var(--text); border
 .results-button.partial { color: #fff; background: var(--yellow); }
 .results-button.failed { color: var(--base); background: var(--failure); }
 .editor-shell { display: grid; grid-template-columns: 48px minmax(0, 1fr); min-height: 0; background: var(--base); }
+.editor-shell.sql-notebook-mode { display: block; overflow: auto; padding: 18px; }
+.sql-notebook { display: grid; gap: 14px; max-width: 920px; margin: 0 auto; }
+.sql-cell { overflow: hidden; border: 1px solid var(--surface-1); border-radius: 5px; background: var(--mantle); }
+.sql-cell.passed { border-color: var(--green); }.sql-cell.failed { border-color: var(--failure); }
+.sql-cell header { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 10px; border-bottom: 1px solid var(--surface-1); }
+.sql-cell header strong { font-size: 13px; }.sql-cell header span { margin-right: auto; color: var(--subtext); font-size: 12px; }.sql-cell.passed header span { color: var(--green); }.sql-cell.failed header span { color: var(--failure); }
+.sql-cell header button { padding: 6px 10px; color: var(--base); border: 0; border-radius: 4px; background: var(--accent); font-size: 12px; font-weight: 780; }
+.sql-cell textarea { display: block; box-sizing: border-box; width: 100%; min-height: 112px; padding: 12px; resize: vertical; color: var(--text); border: 0; outline: 0; background: var(--base); font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.sql-cell-output { max-height: 180px; margin: 0; padding: 10px 12px; overflow: auto; border-top: 1px solid var(--surface-1); background: var(--crust); font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }.sql-cell-output.passed { color: var(--green); }.sql-cell-output.failed, .sql-cell-output.error { color: var(--failure); }
 .line-numbers { padding: 16px 8px; color: var(--overlay); border-right: 1px solid var(--crust); font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; text-align: right; user-select: none; white-space: pre; overflow: hidden; }
 #source-code { width: 100%; min-height: 420px; height: 100%; padding: 16px; resize: none; color: var(--text); border: 0; outline: 0; background: transparent; font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; tab-size: 2; }
 .problem-sidebar { position: fixed; z-index: 20; top: 0; bottom: 0; left: 0; width: min(290px, calc(100vw - 34px)); padding: 18px 12px; border-right: 1px solid var(--surface-1); background: var(--mantle); box-shadow: 10px 0 28px rgb(76 79 105 / .15); transform: translateX(-105%); transition: transform .18s ease; }

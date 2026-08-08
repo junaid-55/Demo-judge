@@ -17,6 +17,8 @@ For a local preview, serve this directory through any static file server. Do not
 
 The browser reads the public problem catalog directly from the backend and sends source only to the loopback agent. The agent obtains the signed grant, fetches private test data, starts Docker, and sends the one final completion request to the backend. Source code and private expected output are not sent from Netlify to the backend directly. SQL problems use a reusable local PostgreSQL container that is released when the user leaves the problem.
 
+SQL problems render as a notebook: one Run button per protected test scenario. Each cell is evaluated locally without creating a submission. The progress label becomes Incomplete, Partially complete, or Complete based on the cells that pass in the active browser session.
+
 ## Netlify and loopback requirements
 
 The backend compose file allows `https://*.netlify.app` through the runner manifest for this demo. Before a real release, replace that wildcard with the exact deployed UI origin. Browsers can require permission to access a local network service from a public HTTPS page; approve the browser prompt if it appears. Keep the agent bound to loopback only, as it is now.

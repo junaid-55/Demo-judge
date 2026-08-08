@@ -234,13 +234,14 @@ def problem_payload(connection: sqlite3.Connection, slug: str, include_expected:
         return None
     languages = connection.execute("""SELECT l.language_name FROM languages l JOIN problem_languages pl ON pl.language_id=l.id
         WHERE pl.problem_id=? ORDER BY l.id""", (problem["id"],)).fetchall()
-    limit = "" if include_hidden_tests else " LIMIT 2"
-    tests = connection.execute(f"SELECT * FROM test_cases WHERE problem_id=? ORDER BY id{limit}", (problem["id"],)).fetchall()
+    all_tests = connection.execute("SELECT * FROM test_cases WHERE problem_id=? ORDER BY id", (problem["id"],)).fetchall()
+    tests = all_tests if include_hidden_tests else all_tests[:2]
     return {
         "slug": problem["slug"], "title": problem["title"], "statement": problem["statement"],
         "time_limit_ms": problem["time_limit_ms"], "memory_limit_mb": problem["memory_limit_mb"],
         "execution_mode": "sql" if problem["sql_fixture"] is not None else "program",
         **({"sql_schema": problem["sql_schema"]} if problem["sql_schema"] is not None else {}),
+        **({"sql_tasks": [{"id": test["id"], "label": f"Query {index + 1}"} for index, test in enumerate(all_tests)]} if problem["sql_fixture"] is not None and not include_expected else {}),
         "allowed_languages": [language["language_name"] for language in languages],
         **({"sql_fixture": problem["sql_fixture"]} if include_expected and problem["sql_fixture"] is not None else {}),
         "tests": [{"id": test["id"], "input": test["input"], **({"expected_output": test["expected_output"], "sql_delta": test["sql_delta"]} if include_expected else ({"expected_output": test["expected_output"]} if not include_hidden_tests else {})), "is_sample": not include_hidden_tests} for test in tests],

@@ -50,11 +50,11 @@ class Service:
     def accepts_origin(self, origin):
         return bool(origin) and any(fnmatch.fnmatchcase(origin, pattern) for pattern in self.origins)
 
-    def start(self, data):
+    def start(self, data, worker=None):
         run_id = str(uuid.uuid4())
         with self.changed:
             self.runs[run_id] = {"status": "queued", "detail": ""}
-        threading.Thread(target=self.run, args=(run_id, data), daemon=True).start()
+        threading.Thread(target=worker or self.run, args=(run_id, data), daemon=True).start()
         return run_id
 
     def set(self, run_id, status, detail="", result=None):
@@ -75,6 +75,8 @@ class Service:
     def run(self, run_id, data):
         try:
             slug, language, source = (data[key] for key in ("problem_slug", "language", "source_code"))
+            if language == "sql":
+                raise ValueError("SQL problems run through individual notebook cells")
             self.set(run_id, "requesting_grant")
             grant = request_json(
                 "POST", self.base + self.manifest["api_paths"]["grant"],
@@ -105,6 +107,29 @@ class Service:
             }
             request_json("POST", self.base + "/v1/local-runs/complete", payload, {"Authorization": f"Bearer {grant}"})
             self.set(run_id, "completed", result["overall_status"], result)
+        except Exception as error:
+            self.set(run_id, "failed", str(error))
+
+    def run_sql_cell(self, run_id, data):
+        try:
+            slug, source, test_case_id = data["problem_slug"], data["source_code"], data["test_case_id"]
+            self.set(run_id, "requesting_grant")
+            grant = request_json(
+                "POST", self.base + self.manifest["api_paths"]["grant"],
+                {"problem_slug": slug, "language": "sql", "source_sha256": hashlib.sha256(source.encode()).hexdigest()},
+                {"X-Demo-User-Id": self.user_id},
+            )["run_grant"]
+            self.set(run_id, "fetching_problem")
+            problem_path = self.manifest["api_paths"]["problem"].replace("{slug}", slug)
+            problem = request_json("GET", self.base + problem_path, headers={"Authorization": f"Bearer {grant}"})
+            if "sql" not in problem["allowed_languages"]:
+                raise ValueError("this problem does not support SQL cells")
+            test = next((item for item in problem["tests"] if item["id"] == test_case_id), None)
+            if not test:
+                raise ValueError("SQL test case does not belong to this problem")
+            result = self.execute_sql_test(source, problem, self.manifest["images"]["sql"], test, lambda detail: self.set(run_id, "preparing_runtime", detail))
+            public_result = {field: result[field] for field in ("test_case_id", "status", "runtime_ms", "actual_output", "error_output", "exit_code")}
+            self.set(run_id, "completed", result["status"], {"passed": result["status"] == "passed", "test": public_result})
         except Exception as error:
             self.set(run_id, "failed", str(error))
 
@@ -183,6 +208,37 @@ class Service:
             self.sql_sessions[problem["slug"]] = session
             return session
 
+    def execute_sql_case(self, session, source, problem, test):
+        database = f"test_{uuid.uuid4().hex}"
+        started = time.monotonic()
+        output = error = ""
+        exit_code = None
+        try:
+            cloned = self.sql_command(session["container"], "postgres", f"CREATE DATABASE {database} TEMPLATE problem_base;")
+            if cloned.returncode:
+                raise RuntimeError(cloned.stderr or "could not clone SQL test database")
+            if test.get("sql_delta"):
+                delta = self.sql_command(session["container"], database, test["sql_delta"])
+                if delta.returncode:
+                    raise RuntimeError(delta.stderr or "could not apply SQL test delta")
+            completed = self.sql_command(session["container"], database, source, user="solver", timeout=problem["time_limit_ms"] / 1000 + 3)
+            output, error, exit_code = completed.stdout, completed.stderr, completed.returncode
+            status = "passed" if completed.returncode == 0 and normalized(output) == normalized(test["expected_output"]) else "runtime_error" if completed.returncode else "failed"
+        except subprocess.TimeoutExpired as caught:
+            status, error = "time_limit_exceeded", str(caught)
+        except Exception as caught:
+            status, error = "runtime_error", str(caught)
+        finally:
+            self.sql_command(session["container"], "postgres", f"DROP DATABASE IF EXISTS {database};")
+        return self.result(test, status, round((time.monotonic() - started) * 1000), output, error, exit_code)
+
+    def execute_sql_test(self, source, problem, image, test, progress=lambda _detail: None):
+        if shutil.which("docker") is None:
+            raise RuntimeError("Docker is not available")
+        self.ensure_image(image, progress)
+        session = self.sql_session(problem, image, progress)
+        return self.execute_sql_case(session, source, problem, test)
+
     def execute_sql(self, source, problem, image, progress=lambda _detail: None):
         if shutil.which("docker") is None:
             raise RuntimeError("Docker is not available")
@@ -190,29 +246,7 @@ class Service:
         session = self.sql_session(problem, image, progress)
         results = []
         for test in problem["tests"]:
-            database = f"test_{uuid.uuid4().hex}"
-            started = time.monotonic()
-            output = error = ""
-            exit_code = None
-            try:
-                cloned = self.sql_command(session["container"], "postgres", f"CREATE DATABASE {database} TEMPLATE problem_base;")
-                if cloned.returncode:
-                    raise RuntimeError(cloned.stderr or "could not clone SQL test database")
-                if test.get("sql_delta"):
-                    delta = self.sql_command(session["container"], database, test["sql_delta"])
-                    if delta.returncode:
-                        raise RuntimeError(delta.stderr or "could not apply SQL test delta")
-                completed = self.sql_command(session["container"], database, source, user="solver", timeout=problem["time_limit_ms"] / 1000 + 3)
-                output, error, exit_code = completed.stdout, completed.stderr, completed.returncode
-                status = "passed" if completed.returncode == 0 and normalized(output) == normalized(test["expected_output"]) else "runtime_error" if completed.returncode else "failed"
-            except subprocess.TimeoutExpired as caught:
-                status, error = "time_limit_exceeded", str(caught)
-            except Exception as caught:
-                status, error = "runtime_error", str(caught)
-            finally:
-                self.sql_command(session["container"], "postgres", f"DROP DATABASE IF EXISTS {database};")
-            elapsed = round((time.monotonic() - started) * 1000)
-            results.append(self.result(test, status, elapsed, output, error, exit_code))
+            results.append(self.execute_sql_case(session, source, problem, test))
         passed = sum(item["status"] == "passed" for item in results)
         statuses = {item["status"] for item in results}
         overall = "accepted" if passed == len(results) else "time_limit_exceeded" if "time_limit_exceeded" in statuses else "runtime_error" if "runtime_error" in statuses else "partial" if passed else "wrong_answer"
@@ -293,9 +327,14 @@ def main():
             self.end_headers()
 
         def do_POST(self):
-            if not service.accepts_origin(self.headers.get("Origin")) or self.path != "/v1/runs": return self.send_json(403, {"error": "forbidden"})
+            if not service.accepts_origin(self.headers.get("Origin")) or self.path not in {"/v1/runs", "/v1/sql-cells"}: return self.send_json(403, {"error": "forbidden"})
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            if self.path == "/v1/sql-cells":
+                if not isinstance(body.get("problem_slug"), str) or not isinstance(body.get("source_code"), str) or not body["source_code"].strip() or not isinstance(body.get("test_case_id"), int):
+                    return self.send_json(400, {"error": "missing SQL cell fields"})
+                return self.send_json(202, {"run_id": service.start(body, service.run_sql_cell), "status": "queued"})
             if not all(isinstance(body.get(key), str) and body[key] for key in ("problem_slug", "language", "source_code")): return self.send_json(400, {"error": "missing run fields"})
+            if body["language"] == "sql": return self.send_json(400, {"error": "SQL problems run through individual notebook cells"})
             self.send_json(202, {"run_id": service.start(body), "status": "queued"})
         def do_DELETE(self):
             parsed = urlsplit(self.path)

@@ -10,14 +10,15 @@ const STARTERS = {
   sql: "-- Write one SELECT query here.\n",
 };
 
-const state = { problems: [], selected: null, runId: null, result: null, failure: null, activeTestId: null, retryTimer: null, connecting: false, theme: localStorage.getItem("chakrikoi-theme") || "latte" };
+const state = { problems: [], selected: null, runId: null, result: null, failure: null, activeTestId: null, retryTimer: null, connecting: false, theme: localStorage.getItem("chakrikoi-theme") || "latte", sqlCells: {}, sqlProblemSlug: null };
 const elements = {
   status: document.querySelector("#connection-status"), sidebar: document.querySelector("#problem-sidebar"), scrim: document.querySelector("#sidebar-scrim"),
   sidebarToggle: document.querySelector("#sidebar-toggle"), sidebarClose: document.querySelector("#sidebar-close"), list: document.querySelector("#problem-list"),
   reconnect: document.querySelector("#reconnect-button"), themeToggle: document.querySelector("#theme-toggle"),
-  content: document.querySelector("#problem-content"), editorProblem: document.querySelector("#editor-problem"), language: document.querySelector("#language"),
+  content: document.querySelector("#problem-content"), editorProblem: document.querySelector("#editor-problem"), sqlProgress: document.querySelector("#sql-progress"), language: document.querySelector("#language"),
   source: document.querySelector("#source-code"), lines: document.querySelector("#line-numbers"), submit: document.querySelector("#submit-button"),
   resultsButton: document.querySelector("#results-button"), resultsDrawer: document.querySelector("#results-drawer"), resultsContent: document.querySelector("#results-content"), resultsClose: document.querySelector("#results-close"),
+  editorShell: document.querySelector(".editor-shell"), sqlNotebook: document.querySelector("#sql-notebook"),
 };
 
 function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]); }
@@ -73,9 +74,70 @@ async function selectProblem(slug) {
     renderProblems(); renderProblem(problem); setSidebar(false); updateResultsButton();
     elements.editorProblem.textContent = problem.title;
     elements.language.innerHTML = problem.allowed_languages.map(language => `<option value="${language}">${LANGUAGE_LABELS[language] || language}</option>`).join("");
-    elements.language.disabled = false; elements.source.disabled = false; elements.submit.disabled = false;
-    elements.source.value = STARTERS[elements.language.value] || ""; updateLines();
+    elements.language.disabled = false;
+    if (problem.execution_mode === "sql") renderSqlNotebook(problem);
+    else renderCodeEditor();
   } catch (error) { renderFailure(error.message); }
+}
+
+function renderCodeEditor() {
+  elements.sqlProgress.hidden = true; elements.language.hidden = false; elements.submit.hidden = false; elements.resultsButton.hidden = false;
+  elements.editorShell.classList.remove("sql-notebook-mode"); elements.sqlNotebook.hidden = true;
+  elements.lines.hidden = false; elements.source.hidden = false; elements.source.disabled = false; elements.submit.disabled = false;
+  elements.source.value = STARTERS[elements.language.value] || ""; updateLines();
+}
+
+function sqlCompletionText() {
+  const cells = Object.values(state.sqlCells);
+  const passed = cells.filter(cell => cell.status === "passed").length;
+  if (passed === cells.length && cells.length) return `Complete ${passed}/${cells.length}`;
+  if (passed) return `Partially complete ${passed}/${cells.length}`;
+  return `Incomplete 0/${cells.length}`;
+}
+
+function renderSqlNotebook(problem) {
+  if (state.sqlProblemSlug !== problem.slug) {
+    state.sqlProblemSlug = problem.slug;
+    state.sqlCells = Object.fromEntries((problem.sql_tasks || []).map(task => [task.id, { task, source: STARTERS.sql, status: "idle", result: null, error: "" }]));
+  }
+  elements.sqlProgress.hidden = false; elements.sqlProgress.textContent = sqlCompletionText();
+  elements.language.hidden = true; elements.submit.hidden = true; elements.resultsButton.hidden = true;
+  elements.editorShell.classList.add("sql-notebook-mode"); elements.lines.hidden = true; elements.source.hidden = true; elements.source.disabled = true; elements.sqlNotebook.hidden = false;
+  elements.sqlNotebook.innerHTML = Object.values(state.sqlCells).map(cell => {
+    const result = cell.result;
+    const output = cell.error ? `<pre class="sql-cell-output error">${escapeHtml(cell.error)}</pre>` : result ? `<pre class="sql-cell-output ${result.status === "passed" ? "passed" : "failed"}">${escapeHtml(result.error_output || result.actual_output || "(no rows returned)")}</pre>` : "";
+    return `<article class="sql-cell ${cell.status}"><header><strong>${escapeHtml(cell.task.label)}</strong><span>${cell.status === "running" ? "Running" : cell.status === "passed" ? "Passed" : cell.status === "failed" ? "Try again" : ""}</span><button type="button" data-run-cell="${cell.task.id}" ${cell.status === "running" ? "disabled" : ""}>Run</button></header><textarea data-cell-source="${cell.task.id}" spellcheck="false" aria-label="${escapeHtml(cell.task.label)} SQL">${escapeHtml(cell.source)}</textarea>${output}</article>`;
+  }).join("");
+  elements.sqlNotebook.querySelectorAll("textarea[data-cell-source]").forEach(input => input.addEventListener("input", () => {
+    const cell = state.sqlCells[Number(input.dataset.cellSource)];
+    cell.source = input.value; cell.status = "idle"; cell.result = null; cell.error = "";
+    input.closest(".sql-cell").className = "sql-cell idle";
+    input.closest(".sql-cell").querySelector("header span").textContent = "";
+    elements.sqlProgress.textContent = sqlCompletionText();
+  }));
+  elements.sqlNotebook.querySelectorAll("[data-run-cell]").forEach(button => button.addEventListener("click", () => runSqlCell(Number(button.dataset.runCell))));
+}
+
+async function runSqlCell(testCaseId) {
+  const cell = state.sqlCells[testCaseId];
+  if (!cell?.source.trim() || !state.selected) return;
+  cell.status = "running"; cell.error = ""; renderSqlNotebook(state.selected);
+  try {
+    const run = await request("/v1/sql-cells", { method: "POST", body: JSON.stringify({ problem_slug: state.selected.slug, test_case_id: testCaseId, source_code: cell.source }) });
+    await pollSqlCell(testCaseId, run.run_id);
+  } catch (error) { cell.status = "failed"; cell.error = error.message; renderSqlNotebook(state.selected); }
+}
+
+async function pollSqlCell(testCaseId, runId) {
+  const cell = state.sqlCells[testCaseId];
+  try {
+    const current = await request(`/v1/runs/${encodeURIComponent(runId)}?wait=25`);
+    if (current.status === "completed") {
+      cell.result = current.result.test; cell.status = current.result.passed ? "passed" : "failed"; renderSqlNotebook(state.selected); return;
+    }
+    if (current.status === "failed") { cell.status = "failed"; cell.error = current.detail; renderSqlNotebook(state.selected); return; }
+    pollSqlCell(testCaseId, runId);
+  } catch (error) { cell.status = "failed"; cell.error = error.message; renderSqlNotebook(state.selected); }
 }
 
 async function releaseSqlSession(slug) {
