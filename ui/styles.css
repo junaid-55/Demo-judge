@@ -84,6 +84,9 @@ button:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opaci
 .limit { padding: 5px 8px; color: var(--subtext); border: 1px solid var(--surface-1); border-radius: 4px; background: var(--mantle); font-size: 12px; }
 .samples { max-width: 600px; margin-top: 32px; }
 .samples h3 { margin: 0 0 10px; font-size: 14px; }
+.sql-scenarios { display: grid; gap: 10px; }
+.sql-scenarios p { margin: 0; color: var(--subtext); font-size: 13px; line-height: 1.55; }
+.sql-scenarios strong { color: var(--text); font-weight: 760; }
 .sample { margin: 0 0 12px; overflow: hidden; border: 1px solid var(--surface-1); border-radius: 5px; background: var(--mantle); }
 .sample label { display: block; padding: 7px 10px; color: var(--subtext); border-bottom: 1px solid var(--surface-1); font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .sample pre { margin: 0; padding: 10px; overflow-x: auto; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
